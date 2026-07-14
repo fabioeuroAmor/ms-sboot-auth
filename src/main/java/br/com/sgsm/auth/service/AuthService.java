@@ -1,0 +1,194 @@
+package br.com.sgsm.auth.service;
+
+import br.com.sgsm.auth.config.JwtProperties;
+import br.com.sgsm.auth.domain.RefreshToken;
+import br.com.sgsm.auth.domain.Usuario;
+import br.com.sgsm.auth.dto.*;
+import br.com.sgsm.auth.exception.*;
+import br.com.sgsm.auth.repository.*;
+import io.jsonwebtoken.Claims;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+@Transactional
+public class AuthService {
+
+    private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR");
+
+    private final UsuarioRepository usuarioRepository;
+    private final RoleRepository roleRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final EntidadeAuthRepository entidadeAuthRepository;
+    private final JwtService jwtService;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtProperties jwtProperties;
+
+    public AuthService(
+            UsuarioRepository usuarioRepository,
+            RoleRepository roleRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            EntidadeAuthRepository entidadeAuthRepository,
+            JwtService jwtService,
+            PasswordEncoder passwordEncoder,
+            JwtProperties jwtProperties
+    ) {
+        this.usuarioRepository = usuarioRepository;
+        this.roleRepository = roleRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.entidadeAuthRepository = entidadeAuthRepository;
+        this.jwtService = jwtService;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtProperties = jwtProperties;
+    }
+
+    public RegistrarResponse registrar(RegistrarRequest request) {
+        if (!PERFIS_VALIDOS.contains(request.tipoPerfil())) {
+            throw new IllegalArgumentException(
+                    "tipoPerfil invalido. Valores aceitos: " + PERFIS_VALIDOS);
+        }
+
+        var entidade = entidadeAuthRepository
+                .findByReferenciaIdAndTipo(request.referenciaId(), request.tipoPerfil())
+                .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                        "Nenhum registro ativo encontrado para referenciaId=" + request.referenciaId()
+                        + " com perfil=" + request.tipoPerfil()));
+
+        if (!entidade.getAtivo()) {
+            throw new EntidadeNaoEncontradaException("A entidade referenciada esta inativa.");
+        }
+        if (!entidade.getEmail().equalsIgnoreCase(request.email())) {
+            throw new CredenciaisInvalidasException(
+                    "O email informado nao corresponde ao registro referenciado.");
+        }
+        if (usuarioRepository.existsByEmail(request.email())) {
+            throw new UsuarioJaExisteException("Email ja cadastrado: " + request.email());
+        }
+
+        var role = roleRepository.findByNome(request.tipoPerfil())
+                .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                        "Role nao encontrada: " + request.tipoPerfil()));
+
+        var usuario = new Usuario();
+        usuario.setEmail(request.email());
+        usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
+        usuario.setTipoPerfil(request.tipoPerfil());
+        usuario.setReferenciaId(request.referenciaId());
+        usuario.setRoles(Set.of(role));
+
+        var salvo = usuarioRepository.save(usuario);
+
+        var response = new RegistrarResponse();
+        response.setId(salvo.getId());
+        response.setEmail(salvo.getEmail());
+        response.setTipoPerfil(salvo.getTipoPerfil());
+        response.setReferenciaId(salvo.getReferenciaId());
+        response.setCriadoEm(salvo.getCriadoEm());
+        return response;
+    }
+
+    public LoginResponse login(LoginRequest request) {
+        var usuario = usuarioRepository.findByEmail(request.email())
+                .orElseThrow(() -> new CredenciaisInvalidasException("Credenciais invalidas."));
+
+        if (!usuario.getAtivo()) {
+            throw new CredenciaisInvalidasException("Credenciais invalidas.");
+        }
+        if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
+            throw new CredenciaisInvalidasException("Credenciais invalidas.");
+        }
+
+        // Valida que a entidade sgsm ainda esta ativa
+        entidadeAuthRepository
+                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                .filter(e -> Boolean.TRUE.equals(e.getAtivo()))
+                .orElseThrow(() -> new CredenciaisInvalidasException(
+                        "A entidade vinculada esta inativa ou foi removida."));
+
+        List<String> roles = usuario.getRoles().stream()
+                .map(r -> r.getNome())
+                .toList();
+
+        List<String> permissions = usuario.getRoles().stream()
+                .flatMap(r -> r.getPermissoes().stream())
+                .map(p -> p.getNome())
+                .distinct()
+                .toList();
+
+        String nome = entidadeAuthRepository
+                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                .map(e -> e.getNome())
+                .orElse(usuario.getEmail());
+
+        String accessToken = jwtService.gerarToken(
+                usuario.getId(), usuario.getEmail(), nome,
+                usuario.getTipoPerfil(), usuario.getReferenciaId(),
+                roles, permissions);
+
+        String tokenRefresh = UUID.randomUUID().toString();
+        var rt = new RefreshToken();
+        rt.setUsuario(usuario);
+        rt.setToken(tokenRefresh);
+        rt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
+        refreshTokenRepository.save(rt);
+
+        return new LoginResponse(accessToken, tokenRefresh, jwtService.expiracaoEmSegundos());
+    }
+
+    public RefreshResponse refresh(RefreshRequest request) {
+        var rt = refreshTokenRepository.findByToken(request.refreshToken())
+                .orElseThrow(() -> new TokenInvalidoException("Refresh token invalido."));
+
+        if (Boolean.TRUE.equals(rt.getRevogado())) {
+            throw new TokenInvalidoException("Refresh token revogado.");
+        }
+        if (rt.getExpiraEm().isBefore(OffsetDateTime.now())) {
+            throw new TokenInvalidoException("Refresh token expirado.");
+        }
+
+        var usuario = rt.getUsuario();
+
+        List<String> roles = usuario.getRoles().stream().map(r -> r.getNome()).toList();
+        List<String> permissions = usuario.getRoles().stream()
+                .flatMap(r -> r.getPermissoes().stream()).map(p -> p.getNome()).distinct().toList();
+
+        String nome = entidadeAuthRepository
+                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                .map(e -> e.getNome()).orElse(usuario.getEmail());
+
+        String novoToken = jwtService.gerarToken(
+                usuario.getId(), usuario.getEmail(), nome,
+                usuario.getTipoPerfil(), usuario.getReferenciaId(), roles, permissions);
+
+        return new RefreshResponse(novoToken, jwtService.expiracaoEmSegundos());
+    }
+
+    public void logout(String refreshTokenStr) {
+        refreshTokenRepository.findByToken(refreshTokenStr).ifPresent(rt -> {
+            rt.setRevogado(true);
+            refreshTokenRepository.save(rt);
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public MeResponse me(String bearerToken) {
+        String token = bearerToken.replace("Bearer ", "");
+        Claims claims = jwtService.extrairClaims(token);
+
+        var response = new MeResponse();
+        response.setId(UUID.fromString(claims.getSubject()));
+        response.setEmail(claims.get("email", String.class));
+        response.setNome(claims.get("nome", String.class));
+        response.setPerfil(claims.get("perfil", String.class));
+        response.setReferenciaId(UUID.fromString(claims.get("referenciaId", String.class)));
+        response.setRoles(claims.get("roles", List.class));
+        response.setPermissions(claims.get("permissions", List.class));
+        return response;
+    }
+}

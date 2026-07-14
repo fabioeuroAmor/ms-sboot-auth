@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: ms-sboot-auth
+  datasource:
+    hikari:
+      connectionTimeout: 20000
+      maximumPoolSize: 5
+    url: jdbc:postgresql://localhost:5432/postgres?stringtype=unspecified
+    username: postgres
+    password: postgres
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: auth
+    ddl-auto: none
+    show-sql: false
+
+jwt:
+  secret: ${JWT_SECRET:sgsm-chave-desenvolvimento-local-minimo-256-bits-nao-usar-em-producao}
+  expiracao-minutos: 15
+  refresh-expiracao-dias: 7
+
+server:
+  port: 8081
