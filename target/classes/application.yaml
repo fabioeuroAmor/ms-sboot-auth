@@ -1,6 +1,9 @@
 spring:
   application:
     name: ms-sboot-auth
+  mvc:
+    problemdetails:
+      enabled: true
   datasource:
     hikari:
       connectionTimeout: 20000
