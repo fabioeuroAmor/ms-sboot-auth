@@ -10,7 +10,7 @@ import java.util.UUID;
  */
 @Entity
 @Immutable
-@Table(name = "v_entidades_possiveis", schema = "auth")
+@Table(name = "v_entidades_possiveis", schema = "ms-sboot-auth")
 public class EntidadeAuth {
 
     @Id

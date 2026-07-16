@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table(name = "usuario", schema = "auth")
+@Table(name = "usuario", schema = "ms-sboot-auth")
 public class Usuario {
 
     @Id
@@ -37,7 +37,7 @@ public class Usuario {
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-        schema = "auth",
+        schema = "ms-sboot-auth",
         name = "usuario_role",
         joinColumns = @JoinColumn(name = "usuario_id"),
         inverseJoinColumns = @JoinColumn(name = "role_id")

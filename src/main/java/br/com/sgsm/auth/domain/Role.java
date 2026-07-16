@@ -6,7 +6,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table(name = "role", schema = "auth")
+@Table(name = "role", schema = "ms-sboot-auth")
 public class Role {
 
     @Id
@@ -21,7 +21,7 @@ public class Role {
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-        schema = "auth",
+        schema = "ms-sboot-auth",
         name = "role_permissao",
         joinColumns = @JoinColumn(name = "role_id"),
         inverseJoinColumns = @JoinColumn(name = "permissao_id")

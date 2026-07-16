@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.util.UUID;
 
 @Entity
-@Table(name = "permissao", schema = "auth")
+@Table(name = "permissao", schema = "ms-sboot-auth")
 public class Permissao {
 
     @Id

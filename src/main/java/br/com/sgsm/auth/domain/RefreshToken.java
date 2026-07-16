@@ -5,7 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "refresh_token", schema = "auth")
+@Table(name = "refresh_token", schema = "ms-sboot-auth")
 public class RefreshToken {
 
     @Id
