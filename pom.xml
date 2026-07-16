@@ -18,6 +18,10 @@
     <properties>
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <jacoco.version>0.8.12</jacoco.version>
+        <dependency-check.version>12.2.2</dependency-check.version>
+        <spotbugs.version>4.10.3.0</spotbugs.version>
+        <findsecbugs.version>1.14.0</findsecbugs.version>
     </properties>
 
     <dependencies>
@@ -127,6 +131,107 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <!--
+                        Excludes documentados (nada de logica de negocio testavel):
+                        - MsAuthApplication: apenas bootstrap do Spring (main).
+                        - dto/**: records puros, sem comportamento.
+                        - domain/**: entidades JPA, so getters/setters e mapeamento de tabela;
+                          os poucos @PrePersist so atribuem valores default, sem regra de negocio.
+                        - config/**: wiring de beans do Spring (SecurityConfig, ModelMapperConfig)
+                          e um record de configuration properties (JwtProperties).
+                        - exception/*Exception.class: exceptions simples, so passam a mensagem pro super().
+                        - repository/**: interfaces do Spring Data, sem corpo/implementacao propria.
+                    -->
+                    <excludes>
+                        <exclude>br/com/sgsm/auth/MsAuthApplication.class</exclude>
+                        <exclude>br/com/sgsm/auth/dto/**</exclude>
+                        <exclude>br/com/sgsm/auth/domain/**</exclude>
+                        <exclude>br/com/sgsm/auth/config/**</exclude>
+                        <exclude>br/com/sgsm/auth/exception/*Exception.class</exclude>
+                        <exclude>br/com/sgsm/auth/repository/**</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                OWASP dependency-check: nao vinculado a nenhuma fase do build (invocado
+                manualmente via `mvn org.owasp:dependency-check-maven:check`) para nao
+                acoplar o build normal a disponibilidade/latencia do feed do NVD.
+            -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check.version}</version>
+                <configuration>
+                    <format>ALL</format>
+                    <failBuildOnCVSS>11</failBuildOnCVSS>
+                </configuration>
+            </plugin>
+
+            <!--
+                SpotBugs + FindSecBugs: tambem nao vinculado a fase alguma do build
+                normal (invocado manualmente via `mvn spotbugs:check` / `mvn spotbugs:gui`)
+                para nao tornar o build padrao mais lento.
+            -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Low</threshold>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                    <plugins>
+                        <plugin>
+                            <groupId>com.h3xstream.findsecbugs</groupId>
+                            <artifactId>findsecbugs-plugin</artifactId>
+                            <version>${findsecbugs.version}</version>
+                        </plugin>
+                    </plugins>
                 </configuration>
             </plugin>
         </plugins>

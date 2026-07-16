@@ -7,4 +7,10 @@ public record RegistrarRequest(
         String senha,
         String tipoPerfil,
         UUID referenciaId
-) {}
+) {
+    @Override
+    public String toString() {
+        return "RegistrarRequest[email=" + email + ", senha=****, tipoPerfil=" + tipoPerfil
+                + ", referenciaId=" + referenciaId + "]";
+    }
+}
