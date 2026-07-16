@@ -20,7 +20,10 @@ spring:
     show-sql: false
 
 jwt:
-  secret: ${JWT_SECRET:sgsm-chave-desenvolvimento-local-minimo-256-bits-nao-usar-em-producao}
+  # Sem valor default: a chave de assinatura JWT NAO pode ter um fallback
+  # comitado no repositorio (permitiria forjar tokens validos). A variavel
+  # JWT_SECRET precisa ser definida no ambiente (dev, CI e producao).
+  secret: ${JWT_SECRET}
   expiracao-minutos: 15
   refresh-expiracao-dias: 7
 

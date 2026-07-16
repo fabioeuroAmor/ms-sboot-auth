@@ -8,11 +8,13 @@ import lombok.Setter;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class RefreshResponse {
     private String accessToken;
+    private String refreshToken;
     private long expiresIn;
     private String tipo = "Bearer";
 
-    public RefreshResponse(String accessToken, long expiresIn) {
+    public RefreshResponse(String accessToken, String refreshToken, long expiresIn) {
         this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
         this.expiresIn = expiresIn;
         this.tipo = "Bearer";
     }

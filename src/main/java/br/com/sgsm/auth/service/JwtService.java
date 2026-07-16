@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
-public class JwtService {
+public final class JwtService {
 
     private final SecretKey chave;
     private final long expiracaoMs;
