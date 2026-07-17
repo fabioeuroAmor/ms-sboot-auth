@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -63,7 +64,9 @@ public class AuthService {
         if (!entidade.getAtivo()) {
             throw new EntidadeNaoEncontradaException("A entidade referenciada esta inativa.");
         }
-        if (!entidade.getEmail().equalsIgnoreCase(request.email())) {
+        // Comparacao explicita com Locale.ROOT (em vez de equalsIgnoreCase) para evitar
+        // colisoes de case-folding dependentes de locale (ex.: "i" turco) apontadas pelo FindSecBugs.
+        if (!entidade.getEmail().toLowerCase(Locale.ROOT).equals(request.email().toLowerCase(Locale.ROOT))) {
             throw new CredenciaisInvalidasException(
                     "O email informado nao corresponde ao registro referenciado.");
         }
@@ -162,11 +165,24 @@ public class AuthService {
                 .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
                 .map(e -> e.getNome()).orElse(usuario.getEmail());
 
-        String novoToken = jwtService.gerarToken(
+        String novoAccessToken = jwtService.gerarToken(
                 usuario.getId(), usuario.getEmail(), nome,
                 usuario.getTipoPerfil(), usuario.getReferenciaId(), roles, permissions);
 
-        return new RefreshResponse(novoToken, jwtService.expiracaoEmSegundos());
+        // Rotacao do refresh token: o token usado e revogado e um novo e emitido,
+        // para que o reuso de um refresh token vazado/roubado seja detectavel
+        // (uma segunda tentativa com o token antigo encontrara "revogado=true").
+        rt.setRevogado(true);
+        refreshTokenRepository.save(rt);
+
+        String novoRefreshToken = UUID.randomUUID().toString();
+        var novoRt = new RefreshToken();
+        novoRt.setUsuario(usuario);
+        novoRt.setToken(novoRefreshToken);
+        novoRt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
+        refreshTokenRepository.save(novoRt);
+
+        return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
 
     public void logout(String refreshTokenStr) {

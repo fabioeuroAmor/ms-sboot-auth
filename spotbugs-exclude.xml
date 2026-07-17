@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Exclusoes documentadas de achados do SpotBugs/FindSecBugs que foram revisados
+    e sao falsos positivos / nao tem implicacao de seguranca neste projeto:
+-->
+<FindBugsFilter>
+
+    <!--
+        SPRING_ENDPOINT: marcador informativo do FindSecBugs para toda classe @RestController,
+        usado internamente para correlacionar com outras regras (nao e uma vulnerabilidade
+        por si so). Dispara em qualquer endpoint Spring MVC.
+    -->
+    <Match>
+        <Class name="br.com.sgsm.auth.controller.AuthController"/>
+        <Bug pattern="SPRING_ENDPOINT"/>
+    </Match>
+
+    <!--
+        EI_EXPOSE_REP / EI_EXPOSE_REP2: entidades JPA precisam expor referencias diretas
+        aos seus relacionamentos (Set/objeto) para que o Hibernate gerencie o grafo de
+        persistencia e o dirty checking corretamente. Copia defensiva quebraria o
+        comportamento do ORM e nao e uma vulnerabilidade de seguranca.
+    -->
+    <Match>
+        <Class name="br.com.sgsm.auth.domain.RefreshToken"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Class name="br.com.sgsm.auth.domain.Role"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Class name="br.com.sgsm.auth.domain.Usuario"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!--
+        IMPROPER_UNICODE: o FindSecBugs sinaliza QUALQUER comparacao case-insensitive
+        (equalsIgnoreCase OU toLowerCase/toUpperCase, mesmo com Locale explicito) devido
+        ao risco teorico de colisao de case-folding dependente de locale (ex.: "i" turco).
+        Aqui o codigo ja usa toLowerCase(Locale.ROOT) explicitamente dos dois lados antes
+        de comparar - exatamente a mitigacao recomendada para esse risco - entao o alerta
+        remanescente e sobre a comparacao case-insensitive em si, que e o comportamento
+        pretendido (emails sao case-insensitive por convencao).
+    -->
+    <Match>
+        <Class name="br.com.sgsm.auth.service.AuthService"/>
+        <Bug pattern="IMPROPER_UNICODE"/>
+    </Match>
+
+    <!--
+        THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION: a assinatura
+        `SecurityFilterChain filterChain(HttpSecurity http) throws Exception` e exigida
+        pela propria API do Spring Security; nao pode ser restringida a uma excecao mais
+        especifica sem quebrar o contrato do framework.
+    -->
+    <Match>
+        <Class name="br.com.sgsm.auth.config.SecurityConfig"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+</FindBugsFilter>
