@@ -1,6 +1,7 @@
 package br.com.sgsm.auth.service;
 
 import br.com.sgsm.auth.config.JwtProperties;
+import br.com.sgsm.auth.domain.EntidadeAuth;
 import br.com.sgsm.auth.domain.RefreshToken;
 import br.com.sgsm.auth.domain.Usuario;
 import br.com.sgsm.auth.dto.*;
@@ -55,11 +56,20 @@ public class AuthService {
                     "tipoPerfil invalido. Valores aceitos: " + PERFIS_VALIDOS);
         }
 
-        var entidade = entidadeAuthRepository
-                .findByReferenciaIdAndTipo(request.referenciaId(), request.tipoPerfil())
-                .orElseThrow(() -> new EntidadeNaoEncontradaException(
-                        "Nenhum registro ativo encontrado para referenciaId=" + request.referenciaId()
-                        + " com perfil=" + request.tipoPerfil()));
+        // FUNCIONARIO nao conhece seu UUID: resolve referenciaId pelo email
+        EntidadeAuth entidade;
+        if ("FUNCIONARIO".equals(request.tipoPerfil()) && request.referenciaId() == null) {
+            entidade = entidadeAuthRepository
+                    .findByEmailAndTipo(request.email(), "FUNCIONARIO")
+                    .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                            "Nenhum funcionario encontrado com email: " + request.email()));
+        } else {
+            entidade = entidadeAuthRepository
+                    .findByReferenciaIdAndTipo(request.referenciaId(), request.tipoPerfil())
+                    .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                            "Nenhum registro ativo encontrado para referenciaId=" + request.referenciaId()
+                            + " com perfil=" + request.tipoPerfil()));
+        }
 
         if (!entidade.getAtivo()) {
             throw new EntidadeNaoEncontradaException("A entidade referenciada esta inativa.");
@@ -82,7 +92,7 @@ public class AuthService {
         usuario.setEmail(request.email());
         usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
         usuario.setTipoPerfil(request.tipoPerfil());
-        usuario.setReferenciaId(request.referenciaId());
+        usuario.setReferenciaId(entidade.getReferenciaId());
         usuario.setRoles(Set.of(role));
 
         var salvo = usuarioRepository.save(usuario);
