@@ -26,4 +26,5 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\RefreshTo
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\RoleRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\UsuarioRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\AuthService.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtBlacklistService.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtService.java

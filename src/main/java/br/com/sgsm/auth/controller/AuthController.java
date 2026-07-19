@@ -40,10 +40,12 @@ public class AuthController {
         return ResponseEntity.ok(service.refresh(request));
     }
 
-    // UC - Revogar refresh token (logout)
+    // UC - Revogar refresh token e invalidar access token na blacklist Redis
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestBody LogoutRequest request) {
-        service.logout(request.refreshToken());
+    public ResponseEntity<Void> logout(
+            @RequestBody LogoutRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        service.logout(request.refreshToken(), authorization);
         return ResponseEntity.noContent().build();
     }
 }

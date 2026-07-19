@@ -29,6 +29,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final EntidadeAuthRepository entidadeAuthRepository;
     private final JwtService jwtService;
+    private final JwtBlacklistService jwtBlacklistService;
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
 
@@ -38,6 +39,7 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             EntidadeAuthRepository entidadeAuthRepository,
             JwtService jwtService,
+            JwtBlacklistService jwtBlacklistService,
             PasswordEncoder passwordEncoder,
             JwtProperties jwtProperties
     ) {
@@ -46,6 +48,7 @@ public class AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.entidadeAuthRepository = entidadeAuthRepository;
         this.jwtService = jwtService;
+        this.jwtBlacklistService = jwtBlacklistService;
         this.passwordEncoder = passwordEncoder;
         this.jwtProperties = jwtProperties;
     }
@@ -195,7 +198,16 @@ public class AuthService {
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
 
-    public void logout(String refreshTokenStr) {
+    public void logout(String refreshTokenStr, String bearerToken) {
+        // Revoga o access token na blacklist do Redis (TTL automático)
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            try {
+                jwtBlacklistService.revogar(bearerToken.substring(7));
+            } catch (Exception ignored) {
+                // token já expirado — não precisa entrar na blacklist
+            }
+        }
+        // Revoga o refresh token no PostgreSQL
         refreshTokenRepository.findByToken(refreshTokenStr).ifPresent(rt -> {
             rt.setRevogado(true);
             refreshTokenRepository.save(rt);

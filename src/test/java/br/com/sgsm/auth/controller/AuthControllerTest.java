@@ -86,10 +86,10 @@ class AuthControllerTest {
     void logout_deveRetornarNoContentEChamarServiceComToken() {
         var request = new LogoutRequest("refresh-token");
 
-        var resposta = controller.logout(request);
+        var resposta = controller.logout(request, null);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(resposta.getBody()).isNull();
-        verify(authService).logout("refresh-token");
+        verify(authService).logout("refresh-token", null);
     }
 }

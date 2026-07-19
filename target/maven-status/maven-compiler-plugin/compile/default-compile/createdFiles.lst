@@ -15,6 +15,7 @@ br\com\sgsm\auth\domain\Permissao.class
 br\com\sgsm\auth\domain\Usuario.class
 br\com\sgsm\auth\config\JwtProperties.class
 br\com\sgsm\auth\domain\Role.class
+br\com\sgsm\auth\service\JwtBlacklistService.class
 br\com\sgsm\auth\config\SecurityConfig.class
 br\com\sgsm\auth\exception\EntidadeNaoEncontradaException.class
 br\com\sgsm\auth\repository\EntidadeAuthRepository.class

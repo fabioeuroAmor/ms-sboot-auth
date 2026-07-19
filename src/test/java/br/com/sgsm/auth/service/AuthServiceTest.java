@@ -59,6 +59,8 @@ class AuthServiceTest {
     @Mock
     private JwtService jwtService;
     @Mock
+    private JwtBlacklistService jwtBlacklistService;
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private AuthService service;
@@ -69,7 +71,7 @@ class AuthServiceTest {
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties("secret", 15, 7);
         service = new AuthService(usuarioRepository, roleRepository, refreshTokenRepository,
-                entidadeAuthRepository, jwtService, passwordEncoder, jwtProperties);
+                entidadeAuthRepository, jwtService, jwtBlacklistService, passwordEncoder, jwtProperties);
     }
 
     private EntidadeAuth entidadeAtiva(String email, String tipo) {
@@ -393,7 +395,7 @@ class AuthServiceTest {
         rt.setRevogado(false);
         when(refreshTokenRepository.findByToken("token-existente")).thenReturn(Optional.of(rt));
 
-        service.logout("token-existente");
+        service.logout("token-existente", null);
 
         assertThat(rt.getRevogado()).isTrue();
         verify(refreshTokenRepository, times(1)).save(rt);
@@ -403,7 +405,7 @@ class AuthServiceTest {
     void logout_naoDeveFazerNada_quandoTokenNaoExiste() {
         when(refreshTokenRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
 
-        service.logout("token-inexistente");
+        service.logout("token-inexistente", null);
 
         verify(refreshTokenRepository, never()).save(any());
     }
