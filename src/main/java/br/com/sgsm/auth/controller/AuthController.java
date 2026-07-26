@@ -2,6 +2,7 @@ package br.com.sgsm.auth.controller;
 
 import br.com.sgsm.auth.dto.*;
 import br.com.sgsm.auth.service.AuthService;
+import br.com.sgsm.auth.service.ResetSenhaService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,9 +12,11 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService service;
+    private final ResetSenhaService resetSenhaService;
 
-    public AuthController(AuthService service) {
+    public AuthController(AuthService service, ResetSenhaService resetSenhaService) {
         this.service = service;
+        this.resetSenhaService = resetSenhaService;
     }
 
     // UC - Registrar usuario vinculado a entidade sgsm
@@ -46,6 +49,29 @@ public class AuthController {
             @RequestBody LogoutRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         service.logout(request.refreshToken(), authorization);
+        return ResponseEntity.noContent().build();
+    }
+
+    // UC - Solicitar link de reset de senha por e-mail
+    @PostMapping("/esqueci-senha")
+    public ResponseEntity<Void> esqueciSenha(@RequestBody EsqueciSenhaRequest request) {
+        resetSenhaService.solicitarReset(request.email());
+        return ResponseEntity.ok().build();
+    }
+
+    // UC - Redefinir senha via token recebido por e-mail
+    @PostMapping("/resetar-senha")
+    public ResponseEntity<Void> resetarSenha(@RequestBody ResetarSenhaRequest request) {
+        resetSenhaService.resetarSenha(request.token(), request.novaSenha());
+        return ResponseEntity.noContent().build();
+    }
+
+    // UC - Alterar senha estando logado
+    @PostMapping("/alterar-senha")
+    public ResponseEntity<Void> alterarSenha(
+            @RequestBody AlterarSenhaRequest request,
+            @RequestHeader("Authorization") String authorization) {
+        resetSenhaService.alterarSenha(authorization, request.senhaAtual(), request.novaSenha());
         return ResponseEntity.noContent().build();
     }
 }

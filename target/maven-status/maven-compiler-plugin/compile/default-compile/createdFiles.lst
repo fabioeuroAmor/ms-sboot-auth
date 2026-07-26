@@ -1,10 +1,14 @@
+br\com\sgsm\auth\service\ResetSenhaService.class
 br\com\sgsm\auth\repository\RefreshTokenRepository.class
+br\com\sgsm\auth\dto\ResetarSenhaRequest.class
 br\com\sgsm\auth\domain\RefreshToken.class
 br\com\sgsm\auth\dto\LoginRequest.class
 br\com\sgsm\auth\exception\TokenInvalidoException.class
 br\com\sgsm\auth\exception\UsuarioJaExisteException.class
 br\com\sgsm\auth\repository\UsuarioRepository.class
 br\com\sgsm\auth\dto\LoginResponse.class
+br\com\sgsm\auth\dto\AlterarSenhaRequest.class
+br\com\sgsm\auth\dto\EsqueciSenhaRequest.class
 br\com\sgsm\auth\domain\EntidadeAuth.class
 br\com\sgsm\auth\config\ModelMapperConfig.class
 br\com\sgsm\auth\controller\AuthController.class
@@ -26,5 +30,8 @@ br\com\sgsm\auth\exception\GlobalExceptionHandler.class
 br\com\sgsm\auth\repository\RoleRepository.class
 br\com\sgsm\auth\service\JwtService.class
 br\com\sgsm\auth\dto\RegistrarResponse.class
+br\com\sgsm\auth\domain\ResetSenhaToken.class
 br\com\sgsm\auth\dto\MeResponse.class
+br\com\sgsm\auth\repository\ResetSenhaTokenRepository.class
+br\com\sgsm\auth\service\EmailService.class
 br\com\sgsm\auth\exception\CredenciaisInvalidasException.class

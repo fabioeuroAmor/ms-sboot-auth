@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -62,6 +63,8 @@ class AuthServiceTest {
     private JwtBlacklistService jwtBlacklistService;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private EmailService emailService;
 
     private AuthService service;
 
@@ -71,7 +74,8 @@ class AuthServiceTest {
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties("secret", 15, 7);
         service = new AuthService(usuarioRepository, roleRepository, refreshTokenRepository,
-                entidadeAuthRepository, jwtService, jwtBlacklistService, passwordEncoder, jwtProperties);
+                entidadeAuthRepository, jwtService, jwtBlacklistService, passwordEncoder, jwtProperties,
+                emailService);
     }
 
     private EntidadeAuth entidadeAtiva(String email, String tipo) {
@@ -215,6 +219,27 @@ class AuthServiceTest {
         verify(usuarioRepository).save(captor.capture());
         assertThat(captor.getValue().getSenhaHash()).isEqualTo("hash-senha");
         assertThat(captor.getValue().getRoles()).containsExactly(role);
+
+        verify(emailService).enviarBoasVindas("a@a.com", "Nome Teste", "PACIENTE", "senha123");
+    }
+
+    @Test
+    void registrar_deveResolverEntidadePeloEmail_quandoFuncionarioSemReferenciaId() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
+        EntidadeAuth entidade = entidadeAtiva("func@a.com", "FUNCIONARIO");
+        Role role = role("FUNCIONARIO");
+        when(entidadeAuthRepository.findByEmailAndTipo("func@a.com", "FUNCIONARIO"))
+                .thenReturn(Optional.of(entidade));
+        when(usuarioRepository.existsByEmail("func@a.com")).thenReturn(false);
+        when(roleRepository.findByNome("FUNCIONARIO")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.registrar(request);
+
+        assertThat(response.getReferenciaId()).isEqualTo(referenciaId);
+        verify(entidadeAuthRepository).findByEmailAndTipo("func@a.com", "FUNCIONARIO");
+        verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
     }
 
     // ---------- login ----------
@@ -408,6 +433,34 @@ class AuthServiceTest {
         service.logout("token-inexistente", null);
 
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void logout_deveRevogarAccessTokenNaBlacklist_quandoBearerTokenPresente() {
+        when(refreshTokenRepository.findByToken("refresh-token")).thenReturn(Optional.empty());
+
+        service.logout("refresh-token", "Bearer access-token-123");
+
+        verify(jwtBlacklistService).revogar("access-token-123");
+    }
+
+    @Test
+    void logout_naoDeveRevogarNaBlacklist_quandoBearerTokenAusenteOuMalFormado() {
+        when(refreshTokenRepository.findByToken("refresh-token")).thenReturn(Optional.empty());
+
+        service.logout("refresh-token", "token-sem-prefixo-bearer");
+
+        verify(jwtBlacklistService, never()).revogar(any());
+    }
+
+    @Test
+    void logout_deveEngolirExcecao_quandoBlacklistFalha() {
+        when(refreshTokenRepository.findByToken("refresh-token")).thenReturn(Optional.empty());
+        doThrow(new RuntimeException("redis indisponivel")).when(jwtBlacklistService).revogar("access-token-123");
+
+        service.logout("refresh-token", "Bearer access-token-123");
+
+        verify(jwtBlacklistService).revogar("access-token-123");
     }
 
     // ---------- me ----------

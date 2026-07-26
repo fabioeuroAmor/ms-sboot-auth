@@ -1,5 +1,7 @@
 package br.com.sgsm.auth.controller;
 
+import br.com.sgsm.auth.dto.AlterarSenhaRequest;
+import br.com.sgsm.auth.dto.EsqueciSenhaRequest;
 import br.com.sgsm.auth.dto.LoginRequest;
 import br.com.sgsm.auth.dto.LoginResponse;
 import br.com.sgsm.auth.dto.LogoutRequest;
@@ -8,7 +10,9 @@ import br.com.sgsm.auth.dto.RefreshRequest;
 import br.com.sgsm.auth.dto.RefreshResponse;
 import br.com.sgsm.auth.dto.RegistrarRequest;
 import br.com.sgsm.auth.dto.RegistrarResponse;
+import br.com.sgsm.auth.dto.ResetarSenhaRequest;
 import br.com.sgsm.auth.service.AuthService;
+import br.com.sgsm.auth.service.ResetSenhaService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,12 +31,14 @@ class AuthControllerTest {
 
     @Mock
     private AuthService authService;
+    @Mock
+    private ResetSenhaService resetSenhaService;
 
     private AuthController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AuthController(authService);
+        controller = new AuthController(authService, resetSenhaService);
     }
 
     @Test
@@ -91,5 +97,35 @@ class AuthControllerTest {
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(resposta.getBody()).isNull();
         verify(authService).logout("refresh-token", null);
+    }
+
+    @Test
+    void esqueciSenha_deveRetornarOkEChamarResetSenhaService() {
+        var request = new EsqueciSenhaRequest("a@a.com");
+
+        var resposta = controller.esqueciSenha(request);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(resetSenhaService).solicitarReset("a@a.com");
+    }
+
+    @Test
+    void resetarSenha_deveRetornarNoContentEChamarResetSenhaService() {
+        var request = new ResetarSenhaRequest("token-123", "novaSenha");
+
+        var resposta = controller.resetarSenha(request);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(resetSenhaService).resetarSenha("token-123", "novaSenha");
+    }
+
+    @Test
+    void alterarSenha_deveRetornarNoContentEChamarResetSenhaService() {
+        var request = new AlterarSenhaRequest("senhaAtual", "novaSenha");
+
+        var resposta = controller.alterarSenha(request, "Bearer token");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(resetSenhaService).alterarSenha("Bearer token", "senhaAtual", "novaSenha");
     }
 }
