@@ -28,7 +28,7 @@ spring:
     username: ${SMTP_USERNAME:MS_3umjcb@test-65qngkdq773lwr12.mlsender.net}
     # Sem fallback: senha SMTP gerada no painel do MailerSend (Domains > SMTP).
     # Nunca colocar a senha real aqui - definir via variavel de ambiente.
-    password: ${SMTP_PASSWORD}
+    password: ${SMTP_PASSWORD:}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
