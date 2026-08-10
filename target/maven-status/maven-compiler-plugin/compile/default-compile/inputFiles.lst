@@ -5,8 +5,11 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\controller\AuthContr
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\EntidadeAuth.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\Permissao.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\RefreshToken.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\ResetSenhaToken.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\Role.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\Usuario.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\AlterarSenhaRequest.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\EsqueciSenhaRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LoginRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LoginResponse.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LogoutRequest.java
@@ -15,6 +18,7 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RefreshRequest.j
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RefreshResponse.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RegistrarRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RegistrarResponse.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\ResetarSenhaRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\exception\CredenciaisInvalidasException.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\exception\EntidadeNaoEncontradaException.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\exception\GlobalExceptionHandler.java
@@ -23,7 +27,11 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\exception\UsuarioJaE
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\MsAuthApplication.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\EntidadeAuthRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\RefreshTokenRepository.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\ResetSenhaTokenRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\RoleRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\repository\UsuarioRepository.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\AuthService.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\EmailService.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtBlacklistService.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtService.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\ResetSenhaService.java

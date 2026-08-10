@@ -18,11 +18,32 @@ spring:
         default_schema: auth
     ddl-auto: none
     show-sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  mail:
+    host: smtp.mailersend.net
+    port: 587
+    username: ${SMTP_USERNAME:MS_3umjcb@test-65qngkdq773lwr12.mlsender.net}
+    # Sem fallback: senha SMTP gerada no painel do MailerSend (Domains > SMTP).
+    # Nunca colocar a senha real aqui - definir via variavel de ambiente.
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 jwt:
   secret: ${JWT_SECRET:sgsm-chave-desenvolvimento-local-minimo-256-bits-nao-usar-em-producao}
   expiracao-minutos: 15
   refresh-expiracao-dias: 7
+
+app:
+  url: ${APP_URL:http://localhost:3001}
 
 server:
   port: 8081

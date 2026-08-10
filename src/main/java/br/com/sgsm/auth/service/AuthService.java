@@ -1,6 +1,7 @@
 package br.com.sgsm.auth.service;
 
 import br.com.sgsm.auth.config.JwtProperties;
+import br.com.sgsm.auth.domain.EntidadeAuth;
 import br.com.sgsm.auth.domain.RefreshToken;
 import br.com.sgsm.auth.domain.Usuario;
 import br.com.sgsm.auth.dto.*;
@@ -28,8 +29,10 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final EntidadeAuthRepository entidadeAuthRepository;
     private final JwtService jwtService;
+    private final JwtBlacklistService jwtBlacklistService;
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
+    private final EmailService emailService;
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -37,16 +40,20 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             EntidadeAuthRepository entidadeAuthRepository,
             JwtService jwtService,
+            JwtBlacklistService jwtBlacklistService,
             PasswordEncoder passwordEncoder,
-            JwtProperties jwtProperties
+            JwtProperties jwtProperties,
+            EmailService emailService
     ) {
         this.usuarioRepository = usuarioRepository;
         this.roleRepository = roleRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.entidadeAuthRepository = entidadeAuthRepository;
         this.jwtService = jwtService;
+        this.jwtBlacklistService = jwtBlacklistService;
         this.passwordEncoder = passwordEncoder;
         this.jwtProperties = jwtProperties;
+        this.emailService = emailService;
     }
 
     public RegistrarResponse registrar(RegistrarRequest request) {
@@ -55,11 +62,20 @@ public class AuthService {
                     "tipoPerfil invalido. Valores aceitos: " + PERFIS_VALIDOS);
         }
 
-        var entidade = entidadeAuthRepository
-                .findByReferenciaIdAndTipo(request.referenciaId(), request.tipoPerfil())
-                .orElseThrow(() -> new EntidadeNaoEncontradaException(
-                        "Nenhum registro ativo encontrado para referenciaId=" + request.referenciaId()
-                        + " com perfil=" + request.tipoPerfil()));
+        // FUNCIONARIO nao conhece seu UUID: resolve referenciaId pelo email
+        EntidadeAuth entidade;
+        if ("FUNCIONARIO".equals(request.tipoPerfil()) && request.referenciaId() == null) {
+            entidade = entidadeAuthRepository
+                    .findByEmailAndTipo(request.email(), "FUNCIONARIO")
+                    .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                            "Nenhum funcionario encontrado com email: " + request.email()));
+        } else {
+            entidade = entidadeAuthRepository
+                    .findByReferenciaIdAndTipo(request.referenciaId(), request.tipoPerfil())
+                    .orElseThrow(() -> new EntidadeNaoEncontradaException(
+                            "Nenhum registro ativo encontrado para referenciaId=" + request.referenciaId()
+                            + " com perfil=" + request.tipoPerfil()));
+        }
 
         if (!entidade.getAtivo()) {
             throw new EntidadeNaoEncontradaException("A entidade referenciada esta inativa.");
@@ -78,14 +94,19 @@ public class AuthService {
                 .orElseThrow(() -> new EntidadeNaoEncontradaException(
                         "Role nao encontrada: " + request.tipoPerfil()));
 
+        String senhaTextoClaro = request.senha();
+
         var usuario = new Usuario();
         usuario.setEmail(request.email());
-        usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
+        usuario.setSenhaHash(passwordEncoder.encode(senhaTextoClaro));
         usuario.setTipoPerfil(request.tipoPerfil());
-        usuario.setReferenciaId(request.referenciaId());
+        usuario.setReferenciaId(entidade.getReferenciaId());
         usuario.setRoles(Set.of(role));
 
         var salvo = usuarioRepository.save(usuario);
+
+        emailService.enviarBoasVindas(salvo.getEmail(), entidade.getNome(),
+                request.tipoPerfil(), senhaTextoClaro);
 
         var response = new RegistrarResponse();
         response.setId(salvo.getId());
@@ -185,7 +206,16 @@ public class AuthService {
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
 
-    public void logout(String refreshTokenStr) {
+    public void logout(String refreshTokenStr, String bearerToken) {
+        // Revoga o access token na blacklist do Redis (TTL automático)
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            try {
+                jwtBlacklistService.revogar(bearerToken.substring(7));
+            } catch (Exception ignored) {
+                // token já expirado — não precisa entrar na blacklist
+            }
+        }
+        // Revoga o refresh token no PostgreSQL
         refreshTokenRepository.findByToken(refreshTokenStr).ifPresent(rt -> {
             rt.setRevogado(true);
             refreshTokenRepository.save(rt);

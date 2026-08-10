@@ -38,6 +38,7 @@ public final class JwtService {
     ) {
         Instant agora = Instant.now();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(usuarioId.toString())
                 .claim("email", email)
                 .claim("nome", nome)
