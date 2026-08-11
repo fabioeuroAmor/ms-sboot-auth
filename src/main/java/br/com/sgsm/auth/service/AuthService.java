@@ -206,6 +206,46 @@ public class AuthService {
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
 
+    // Método interno usado pelo OtpService para emitir tokens sem verificar senha.
+    // O caller é responsável por autenticar o usuário via OTP antes de invocar este método.
+    @Transactional
+    public LoginResponse loginPorOtp(Usuario usuario) {
+        if (!Boolean.TRUE.equals(usuario.getAtivo())) {
+            throw new CredenciaisInvalidasException("Usuário inativo.");
+        }
+
+        List<String> roles = usuario.getRoles().stream()
+                .map(r -> r.getNome())
+                .toList();
+
+        List<String> permissions = usuario.getRoles().stream()
+                .flatMap(r -> r.getPermissoes().stream())
+                .map(p -> p.getNome())
+                .distinct()
+                .toList();
+
+        String nome = entidadeAuthRepository
+                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                .map(e -> e.getNome())
+                .orElse(usuario.getEmail());
+
+        String accessToken = jwtService.gerarToken(
+                usuario.getId(), usuario.getEmail(), nome,
+                usuario.getTipoPerfil(), usuario.getReferenciaId(),
+                roles, permissions);
+
+        String tokenRefresh = UUID.randomUUID().toString();
+        var rt = new RefreshToken();
+        rt.setUsuario(usuario);
+        rt.setToken(tokenRefresh);
+        rt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
+        refreshTokenRepository.save(rt);
+
+        var response = new LoginResponse(accessToken, tokenRefresh, jwtService.expiracaoEmSegundos());
+        response.setTipoPerfil(usuario.getTipoPerfil());
+        return response;
+    }
+
     public void logout(String refreshTokenStr, String bearerToken) {
         // Revoga o access token na blacklist do Redis (TTL automático)
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
