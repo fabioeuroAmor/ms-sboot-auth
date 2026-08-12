@@ -17,6 +17,8 @@ br\com\sgsm\auth\service\AuthService.class
 br\com\sgsm\auth\dto\LogoutRequest.class
 br\com\sgsm\auth\domain\Permissao.class
 br\com\sgsm\auth\domain\Usuario.class
+br\com\sgsm\auth\service\OtpService.class
+br\com\sgsm\auth\dto\OtpGerarResponse.class
 br\com\sgsm\auth\config\JwtProperties.class
 br\com\sgsm\auth\domain\Role.class
 br\com\sgsm\auth\service\JwtBlacklistService.class
@@ -26,10 +28,13 @@ br\com\sgsm\auth\repository\EntidadeAuthRepository.class
 br\com\sgsm\auth\dto\RefreshRequest.class
 br\com\sgsm\auth\dto\RegistrarRequest.class
 br\com\sgsm\auth\MsAuthApplication.class
+br\com\sgsm\auth\controller\OtpController.class
+br\com\sgsm\auth\dto\OtpGerarRequest.class
 br\com\sgsm\auth\exception\GlobalExceptionHandler.class
 br\com\sgsm\auth\repository\RoleRepository.class
 br\com\sgsm\auth\service\JwtService.class
 br\com\sgsm\auth\dto\RegistrarResponse.class
+br\com\sgsm\auth\dto\OtpVerificarRequest.class
 br\com\sgsm\auth\domain\ResetSenhaToken.class
 br\com\sgsm\auth\dto\MeResponse.class
 br\com\sgsm\auth\repository\ResetSenhaTokenRepository.class

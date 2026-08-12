@@ -43,7 +43,7 @@ public final class JwtService {
                 .claim("email", email)
                 .claim("nome", nome)
                 .claim("perfil", perfil)
-                .claim("referenciaId", referenciaId.toString())
+                .claim("referenciaId", referenciaId != null ? referenciaId.toString() : null)
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .issuedAt(Date.from(agora))
