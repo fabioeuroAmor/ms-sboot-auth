@@ -5,6 +5,7 @@ import br.com.sgsm.auth.domain.ResetSenhaToken;
 import br.com.sgsm.auth.domain.Usuario;
 import br.com.sgsm.auth.exception.CredenciaisInvalidasException;
 import br.com.sgsm.auth.exception.TokenInvalidoException;
+import br.com.sgsm.auth.exception.TokenResetInvalidoException;
 import br.com.sgsm.auth.repository.EntidadeAuthRepository;
 import br.com.sgsm.auth.repository.RefreshTokenRepository;
 import br.com.sgsm.auth.repository.ResetSenhaTokenRepository;
@@ -121,35 +122,43 @@ class ResetSenhaServiceTest {
     // ---------- resetarSenha ----------
 
     @Test
-    void resetarSenha_deveLancarTokenInvalido_quandoTokenNaoExiste() {
+    void resetarSenha_deveLancarTokenResetInvalido_quandoTokenNaoExiste() {
         when(resetTokenRepository.findByToken("inexistente")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.resetarSenha("inexistente", "novaSenha"))
-                .isInstanceOf(TokenInvalidoException.class)
+                .isInstanceOf(TokenResetInvalidoException.class)
                 .hasMessageContaining("inválido");
     }
 
     @Test
-    void resetarSenha_deveLancarTokenInvalido_quandoTokenJaUsado() {
+    void resetarSenha_deveLancarTokenResetInvalido_quandoTokenJaUsado() {
         ResetSenhaToken rt = new ResetSenhaToken();
         rt.setUsado(true);
         when(resetTokenRepository.findByToken("token")).thenReturn(Optional.of(rt));
 
         assertThatThrownBy(() -> service.resetarSenha("token", "novaSenha"))
-                .isInstanceOf(TokenInvalidoException.class)
+                .isInstanceOf(TokenResetInvalidoException.class)
                 .hasMessageContaining("já foi utilizado");
     }
 
     @Test
-    void resetarSenha_deveLancarTokenInvalido_quandoTokenExpirado() {
+    void resetarSenha_deveLancarTokenResetInvalido_quandoTokenExpirado() {
         ResetSenhaToken rt = new ResetSenhaToken();
         rt.setUsado(false);
         rt.setExpiraEm(OffsetDateTime.now().minusHours(1));
         when(resetTokenRepository.findByToken("token")).thenReturn(Optional.of(rt));
 
         assertThatThrownBy(() -> service.resetarSenha("token", "novaSenha"))
-                .isInstanceOf(TokenInvalidoException.class)
+                .isInstanceOf(TokenResetInvalidoException.class)
                 .hasMessageContaining("expirado");
+    }
+
+    @Test
+    void resetarSenha_deveLancarIllegalArgument_quandoSenhaCurta() {
+        assertThatThrownBy(() -> service.resetarSenha("token", "curta"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("8 caracteres");
+        verify(resetTokenRepository, never()).findByToken(any());
     }
 
     @Test
@@ -178,6 +187,14 @@ class ResetSenhaServiceTest {
     // ---------- alterarSenha ----------
 
     @Test
+    void alterarSenha_deveLancarIllegalArgument_quandoSenhaCurta() {
+        assertThatThrownBy(() -> service.alterarSenha("Bearer token-valido", "atual", "curta"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("8 caracteres");
+        verify(jwtService, never()).extrairClaims(any());
+    }
+
+    @Test
     void alterarSenha_deveLancarTokenInvalido_quandoUsuarioNaoExiste() {
         UUID usuarioId = UUID.randomUUID();
         Claims claims = mock(Claims.class);
@@ -185,7 +202,7 @@ class ResetSenhaServiceTest {
         when(jwtService.extrairClaims("token-valido")).thenReturn(claims);
         when(usuarioRepository.findById(usuarioId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.alterarSenha("Bearer token-valido", "atual", "nova"))
+        assertThatThrownBy(() -> service.alterarSenha("Bearer token-valido", "atual", "novaSenha"))
                 .isInstanceOf(TokenInvalidoException.class);
     }
 
@@ -199,7 +216,7 @@ class ResetSenhaServiceTest {
         when(usuarioRepository.findById(usuarioId)).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("senhaErrada", "hash-antigo")).thenReturn(false);
 
-        assertThatThrownBy(() -> service.alterarSenha("Bearer token-valido", "senhaErrada", "nova"))
+        assertThatThrownBy(() -> service.alterarSenha("Bearer token-valido", "senhaErrada", "novaSenha"))
                 .isInstanceOf(CredenciaisInvalidasException.class)
                 .hasMessageContaining("incorreta");
     }
