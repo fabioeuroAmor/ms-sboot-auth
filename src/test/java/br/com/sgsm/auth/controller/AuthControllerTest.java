@@ -1,6 +1,7 @@
 package br.com.sgsm.auth.controller;
 
 import br.com.sgsm.auth.dto.AlterarSenhaRequest;
+import br.com.sgsm.auth.dto.EmailDisponivelResponse;
 import br.com.sgsm.auth.dto.EsqueciSenhaRequest;
 import br.com.sgsm.auth.dto.LoginRequest;
 import br.com.sgsm.auth.dto.LoginResponse;
@@ -51,6 +52,16 @@ class AuthControllerTest {
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(resposta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void emailDisponivel_deveRetornarOkComResultadoDoService() {
+        when(authService.emailDisponivel("livre@a.com")).thenReturn(true);
+
+        var resposta = controller.emailDisponivel("livre@a.com");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resposta.getBody()).isEqualTo(new EmailDisponivelResponse(true));
     }
 
     @Test

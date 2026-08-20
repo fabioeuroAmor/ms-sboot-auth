@@ -113,6 +113,22 @@ class AuthServiceTest {
         return usuario;
     }
 
+    // ---------- emailDisponivel ----------
+
+    @Test
+    void emailDisponivel_deveRetornarTrue_quandoEmailNaoCadastrado() {
+        when(usuarioRepository.existsByEmail("livre@a.com")).thenReturn(false);
+
+        assertThat(service.emailDisponivel("livre@a.com")).isTrue();
+    }
+
+    @Test
+    void emailDisponivel_deveRetornarFalse_quandoEmailJaCadastrado() {
+        when(usuarioRepository.existsByEmail("ocupado@a.com")).thenReturn(true);
+
+        assertThat(service.emailDisponivel("ocupado@a.com")).isFalse();
+    }
+
     // ---------- registrar ----------
 
     @Test
