@@ -56,6 +56,11 @@ public class AuthService {
         this.emailService = emailService;
     }
 
+    @Transactional(readOnly = true)
+    public boolean emailDisponivel(String email) {
+        return !usuarioRepository.existsByEmail(email);
+    }
+
     public RegistrarResponse registrar(RegistrarRequest request) {
         if (!PERFIS_VALIDOS.contains(request.tipoPerfil())) {
             throw new IllegalArgumentException(
