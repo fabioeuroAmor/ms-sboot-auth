@@ -258,6 +258,64 @@ class AuthServiceTest {
         verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
     }
 
+    @Test
+    void registrar_deveCriarDesenvolvedor_quandoDadosValidos() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+        Role role = role("DESENVOLVEDOR");
+        when(usuarioRepository.existsByEmail("dev@a.com")).thenReturn(false);
+        when(roleRepository.findByNome("DESENVOLVEDOR")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
+
+        UUID novoId = UUID.randomUUID();
+        OffsetDateTime criadoEm = OffsetDateTime.now();
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+            Usuario usuario = invocation.getArgument(0);
+            ReflectionTestUtils.setField(usuario, "id", novoId);
+            ReflectionTestUtils.setField(usuario, "criadoEm", criadoEm);
+            return usuario;
+        });
+
+        var response = service.registrar(request);
+
+        assertThat(response.getId()).isEqualTo(novoId);
+        assertThat(response.getEmail()).isEqualTo("dev@a.com");
+        assertThat(response.getTipoPerfil()).isEqualTo("DESENVOLVEDOR");
+        assertThat(response.getReferenciaId()).isNull();
+        assertThat(response.getCriadoEm()).isEqualTo(criadoEm);
+
+        ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(captor.capture());
+        assertThat(captor.getValue().getSenhaHash()).isEqualTo("hash-senha");
+        assertThat(captor.getValue().getReferenciaId()).isNull();
+        assertThat(captor.getValue().getRoles()).containsExactly(role);
+
+        verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
+        verify(emailService, never()).enviarBoasVindas(any(), any(), any(), any());
+    }
+
+    @Test
+    void registrar_deveLancarUsuarioJaExiste_quandoDesenvolvedorComEmailDuplicado() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+        when(usuarioRepository.existsByEmail("dev@a.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.registrar(request))
+                .isInstanceOf(UsuarioJaExisteException.class)
+                .hasMessageContaining("Email ja cadastrado");
+
+        verify(roleRepository, never()).findByNome(any());
+    }
+
+    @Test
+    void registrar_deveLancarEntidadeNaoEncontrada_quandoRoleDesenvolvedorNaoExiste() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+        when(usuarioRepository.existsByEmail("dev@a.com")).thenReturn(false);
+        when(roleRepository.findByNome("DESENVOLVEDOR")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.registrar(request))
+                .isInstanceOf(EntidadeNaoEncontradaException.class)
+                .hasMessageContaining("Role nao encontrada: DESENVOLVEDOR");
+    }
+
     // ---------- login ----------
 
     @Test
@@ -426,6 +484,47 @@ class AuthServiceTest {
         RefreshToken novoRt = captor.getAllValues().get(1);
         assertThat(novoRt.getToken()).isEqualTo(response.getRefreshToken());
         assertThat(novoRt.getUsuario()).isEqualTo(usuario);
+    }
+
+    // ---------- loginPorOtp ----------
+
+    @Test
+    void loginPorOtp_deveRetornarTokens_quandoUsuarioAtivo() {
+        Role role = role("PACIENTE", permissao("AGENDA_LER"));
+        Usuario usuario = usuarioAtivo("a@a.com", "hash", "PACIENTE", role);
+        EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
+
+        when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
+                .thenReturn(Optional.of(entidade));
+        when(jwtService.gerarToken(eq(usuario.getId()), eq("a@a.com"), eq("Nome Teste"),
+                eq("PACIENTE"), eq(referenciaId), anyList(), anyList()))
+                .thenReturn("access-token-otp");
+        when(jwtService.expiracaoEmSegundos()).thenReturn(900L);
+
+        var response = service.loginPorOtp(usuario);
+
+        assertThat(response.getAccessToken()).isEqualTo("access-token-otp");
+        assertThat(response.getRefreshToken()).isNotBlank();
+        assertThat(response.getExpiresIn()).isEqualTo(900L);
+        assertThat(response.getTipo()).isEqualTo("Bearer");
+        assertThat(response.getTipoPerfil()).isEqualTo("PACIENTE");
+
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getUsuario()).isEqualTo(usuario);
+        assertThat(captor.getValue().getToken()).isEqualTo(response.getRefreshToken());
+    }
+
+    @Test
+    void loginPorOtp_deveLancarCredenciaisInvalidas_quandoUsuarioInativo() {
+        Usuario usuario = usuarioAtivo("a@a.com", "hash", "PACIENTE");
+        usuario.setAtivo(false);
+
+        assertThatThrownBy(() -> service.loginPorOtp(usuario))
+                .isInstanceOf(CredenciaisInvalidasException.class)
+                .hasMessageContaining("inativo");
+
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     // ---------- logout ----------
