@@ -11,6 +11,7 @@ public class LoginResponse {
     private String refreshToken;
     private long expiresIn;
     private String tipo = "Bearer";
+    private String tipoPerfil;
 
     public LoginResponse(String accessToken, String refreshToken, long expiresIn) {
         this.accessToken = accessToken;

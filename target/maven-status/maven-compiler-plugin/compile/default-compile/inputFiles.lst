@@ -2,6 +2,7 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\config\JwtProperties
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\config\ModelMapperConfig.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\config\SecurityConfig.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\controller\AuthController.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\controller\OtpController.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\EntidadeAuth.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\Permissao.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\domain\RefreshToken.java
@@ -14,6 +15,9 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LoginRequest.jav
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LoginResponse.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\LogoutRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\MeResponse.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\OtpGerarRequest.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\OtpGerarResponse.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\OtpVerificarRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RefreshRequest.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RefreshResponse.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\dto\RegistrarRequest.java
@@ -34,4 +38,5 @@ C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\AuthService.
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\EmailService.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtBlacklistService.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\JwtService.java
+C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\OtpService.java
 C:\AmbienteDev\ms-sboot-auth\src\main\java\br\com\sgsm\auth\service\ResetSenhaService.java

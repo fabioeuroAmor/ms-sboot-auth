@@ -23,6 +23,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "token-invalido", "Token inválido ou expirado", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(TokenResetInvalidoException.class)
+    public ResponseEntity<ProblemDetail> handleTokenResetInvalido(TokenResetInvalidoException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "token-reset-invalido", "Link de redefinição inválido", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(UsuarioJaExisteException.class)
     public ResponseEntity<ProblemDetail> handleUsuarioJaExiste(UsuarioJaExisteException ex, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "usuario-ja-existe", "Usuário já cadastrado", ex.getMessage(), request);

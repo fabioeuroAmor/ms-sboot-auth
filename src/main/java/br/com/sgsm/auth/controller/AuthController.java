@@ -25,6 +25,13 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.registrar(request));
     }
 
+    // UC - Checar disponibilidade de e-mail antes de iniciar um auto-cadastro
+    // (evita criar um medico/paciente orfao no sgsm quando o e-mail ja esta em uso)
+    @GetMapping("/email-disponivel")
+    public ResponseEntity<EmailDisponivelResponse> emailDisponivel(@RequestParam String email) {
+        return ResponseEntity.ok(new EmailDisponivelResponse(service.emailDisponivel(email)));
+    }
+
     // UC - Autenticar e obter tokens
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {

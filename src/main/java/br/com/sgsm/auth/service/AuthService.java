@@ -56,10 +56,42 @@ public class AuthService {
         this.emailService = emailService;
     }
 
+    @Transactional(readOnly = true)
+    public boolean emailDisponivel(String email) {
+        return !usuarioRepository.existsByEmail(email);
+    }
+
     public RegistrarResponse registrar(RegistrarRequest request) {
         if (!PERFIS_VALIDOS.contains(request.tipoPerfil())) {
             throw new IllegalArgumentException(
                     "tipoPerfil invalido. Valores aceitos: " + PERFIS_VALIDOS);
+        }
+
+        // DESENVOLVEDOR nao tem entidade no sgsm — sem validacao de referenciaId
+        if ("DESENVOLVEDOR".equals(request.tipoPerfil())) {
+            if (usuarioRepository.existsByEmail(request.email())) {
+                throw new UsuarioJaExisteException("Email ja cadastrado: " + request.email());
+            }
+
+            var role = roleRepository.findByNome("DESENVOLVEDOR")
+                    .orElseThrow(() -> new EntidadeNaoEncontradaException("Role nao encontrada: DESENVOLVEDOR"));
+
+            var usuario = new Usuario();
+            usuario.setEmail(request.email());
+            usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
+            usuario.setTipoPerfil("DESENVOLVEDOR");
+            usuario.setReferenciaId(null);
+            usuario.setRoles(Set.of(role));
+
+            var salvo = usuarioRepository.save(usuario);
+
+            var response = new RegistrarResponse();
+            response.setId(salvo.getId());
+            response.setEmail(salvo.getEmail());
+            response.setTipoPerfil(salvo.getTipoPerfil());
+            response.setReferenciaId(null);
+            response.setCriadoEm(salvo.getCriadoEm());
+            return response;
         }
 
         // FUNCIONARIO nao conhece seu UUID: resolve referenciaId pelo email
@@ -128,12 +160,14 @@ public class AuthService {
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
 
-        // Valida que a entidade sgsm ainda esta ativa
-        entidadeAuthRepository
-                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
-                .filter(e -> Boolean.TRUE.equals(e.getAtivo()))
-                .orElseThrow(() -> new CredenciaisInvalidasException(
-                        "A entidade vinculada esta inativa ou foi removida."));
+        // Valida que a entidade sgsm ainda esta ativa (DESENVOLVEDOR nao tem entidade)
+        if (!"DESENVOLVEDOR".equals(usuario.getTipoPerfil())) {
+            entidadeAuthRepository
+                    .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                    .filter(e -> Boolean.TRUE.equals(e.getAtivo()))
+                    .orElseThrow(() -> new CredenciaisInvalidasException(
+                            "A entidade vinculada esta inativa ou foi removida."));
+        }
 
         List<String> roles = usuario.getRoles().stream()
                 .map(r -> r.getNome())
@@ -145,10 +179,12 @@ public class AuthService {
                 .distinct()
                 .toList();
 
-        String nome = entidadeAuthRepository
-                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
-                .map(e -> e.getNome())
-                .orElse(usuario.getEmail());
+        String nome = "DESENVOLVEDOR".equals(usuario.getTipoPerfil())
+                ? usuario.getEmail()
+                : entidadeAuthRepository
+                        .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                        .map(e -> e.getNome())
+                        .orElse(usuario.getEmail());
 
         String accessToken = jwtService.gerarToken(
                 usuario.getId(), usuario.getEmail(), nome,
@@ -182,9 +218,11 @@ public class AuthService {
         List<String> permissions = usuario.getRoles().stream()
                 .flatMap(r -> r.getPermissoes().stream()).map(p -> p.getNome()).distinct().toList();
 
-        String nome = entidadeAuthRepository
-                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
-                .map(e -> e.getNome()).orElse(usuario.getEmail());
+        String nome = "DESENVOLVEDOR".equals(usuario.getTipoPerfil())
+                ? usuario.getEmail()
+                : entidadeAuthRepository
+                        .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                        .map(e -> e.getNome()).orElse(usuario.getEmail());
 
         String novoAccessToken = jwtService.gerarToken(
                 usuario.getId(), usuario.getEmail(), nome,
@@ -204,6 +242,46 @@ public class AuthService {
         refreshTokenRepository.save(novoRt);
 
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
+    }
+
+    // Método interno usado pelo OtpService para emitir tokens sem verificar senha.
+    // O caller é responsável por autenticar o usuário via OTP antes de invocar este método.
+    @Transactional
+    public LoginResponse loginPorOtp(Usuario usuario) {
+        if (!Boolean.TRUE.equals(usuario.getAtivo())) {
+            throw new CredenciaisInvalidasException("Usuário inativo.");
+        }
+
+        List<String> roles = usuario.getRoles().stream()
+                .map(r -> r.getNome())
+                .toList();
+
+        List<String> permissions = usuario.getRoles().stream()
+                .flatMap(r -> r.getPermissoes().stream())
+                .map(p -> p.getNome())
+                .distinct()
+                .toList();
+
+        String nome = entidadeAuthRepository
+                .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
+                .map(e -> e.getNome())
+                .orElse(usuario.getEmail());
+
+        String accessToken = jwtService.gerarToken(
+                usuario.getId(), usuario.getEmail(), nome,
+                usuario.getTipoPerfil(), usuario.getReferenciaId(),
+                roles, permissions);
+
+        String tokenRefresh = UUID.randomUUID().toString();
+        var rt = new RefreshToken();
+        rt.setUsuario(usuario);
+        rt.setToken(tokenRefresh);
+        rt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
+        refreshTokenRepository.save(rt);
+
+        var response = new LoginResponse(accessToken, tokenRefresh, jwtService.expiracaoEmSegundos());
+        response.setTipoPerfil(usuario.getTipoPerfil());
+        return response;
     }
 
     public void logout(String refreshTokenStr, String bearerToken) {
@@ -232,7 +310,8 @@ public class AuthService {
         response.setEmail(claims.get("email", String.class));
         response.setNome(claims.get("nome", String.class));
         response.setPerfil(claims.get("perfil", String.class));
-        response.setReferenciaId(UUID.fromString(claims.get("referenciaId", String.class)));
+        String referenciaIdStr = claims.get("referenciaId", String.class);
+        response.setReferenciaId(referenciaIdStr != null ? UUID.fromString(referenciaIdStr) : null);
         response.setRoles(claims.get("roles", List.class));
         response.setPermissions(claims.get("permissions", List.class));
         return response;

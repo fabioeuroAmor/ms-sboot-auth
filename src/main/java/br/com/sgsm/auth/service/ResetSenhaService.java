@@ -3,6 +3,7 @@ package br.com.sgsm.auth.service;
 import br.com.sgsm.auth.domain.ResetSenhaToken;
 import br.com.sgsm.auth.exception.CredenciaisInvalidasException;
 import br.com.sgsm.auth.exception.TokenInvalidoException;
+import br.com.sgsm.auth.exception.TokenResetInvalidoException;
 import br.com.sgsm.auth.repository.EntidadeAuthRepository;
 import br.com.sgsm.auth.repository.RefreshTokenRepository;
 import br.com.sgsm.auth.repository.ResetSenhaTokenRepository;
@@ -59,14 +60,18 @@ public class ResetSenhaService {
     }
 
     public void resetarSenha(String token, String novaSenha) {
+        if (novaSenha == null || novaSenha.length() < 8) {
+            throw new IllegalArgumentException("A senha deve ter no mínimo 8 caracteres.");
+        }
+
         var resetToken = resetTokenRepository.findByToken(token)
-                .orElseThrow(() -> new TokenInvalidoException("Link inválido."));
+                .orElseThrow(() -> new TokenResetInvalidoException("Link inválido."));
 
         if (Boolean.TRUE.equals(resetToken.getUsado())) {
-            throw new TokenInvalidoException("Este link já foi utilizado.");
+            throw new TokenResetInvalidoException("Este link já foi utilizado.");
         }
         if (resetToken.getExpiraEm().isBefore(OffsetDateTime.now())) {
-            throw new TokenInvalidoException("Link expirado. Solicite um novo.");
+            throw new TokenResetInvalidoException("Link expirado. Solicite um novo.");
         }
 
         var usuario = resetToken.getUsuario();
@@ -83,6 +88,10 @@ public class ResetSenhaService {
     }
 
     public void alterarSenha(String bearerToken, String senhaAtual, String novaSenha) {
+        if (novaSenha == null || novaSenha.length() < 8) {
+            throw new IllegalArgumentException("A senha deve ter no mínimo 8 caracteres.");
+        }
+
         Claims claims = jwtService.extrairClaims(bearerToken.replace("Bearer ", ""));
         var usuario = usuarioRepository.findById(UUID.fromString(claims.getSubject()))
                 .orElseThrow(() -> new TokenInvalidoException("Token inválido."));
