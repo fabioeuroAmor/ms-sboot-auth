@@ -2,6 +2,7 @@ package br.com.sgsm.auth.service;
 
 import br.com.sgsm.auth.config.JwtProperties;
 import br.com.sgsm.auth.domain.EntidadeAuth;
+import br.com.sgsm.auth.domain.EventoAutenticacao;
 import br.com.sgsm.auth.domain.Permissao;
 import br.com.sgsm.auth.domain.RefreshToken;
 import br.com.sgsm.auth.domain.Role;
@@ -65,6 +66,8 @@ class AuthServiceTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private EmailService emailService;
+    @Mock
+    private AutenticacaoAuditoriaService autenticacaoAuditoriaService;
 
     private AuthService service;
 
@@ -75,7 +78,7 @@ class AuthServiceTest {
         JwtProperties jwtProperties = new JwtProperties("secret", 15, 7);
         service = new AuthService(usuarioRepository, roleRepository, refreshTokenRepository,
                 entidadeAuthRepository, jwtService, jwtBlacklistService, passwordEncoder, jwtProperties,
-                emailService);
+                emailService, autenticacaoAuditoriaService);
     }
 
     private EntidadeAuth entidadeAtiva(String email, String tipo) {
@@ -237,6 +240,7 @@ class AuthServiceTest {
         assertThat(captor.getValue().getRoles()).containsExactly(role);
 
         verify(emailService).enviarBoasVindas("a@a.com", "Nome Teste", "PACIENTE", "senha123");
+        verify(autenticacaoAuditoriaService).registrar(novoId, "a@a.com", EventoAutenticacao.REGISTRO, "tipoPerfil=PACIENTE");
     }
 
     @Test
@@ -267,6 +271,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> service.login(request))
                 .isInstanceOf(CredenciaisInvalidasException.class);
+        verify(autenticacaoAuditoriaService).registrar(null, "a@a.com", EventoAutenticacao.LOGIN_FALHA, "email nao cadastrado");
     }
 
     @Test
@@ -278,6 +283,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> service.login(request))
                 .isInstanceOf(CredenciaisInvalidasException.class);
+        verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "a@a.com", EventoAutenticacao.LOGIN_FALHA, "usuario inativo");
     }
 
     @Test
@@ -289,6 +295,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> service.login(request))
                 .isInstanceOf(CredenciaisInvalidasException.class);
+        verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "a@a.com", EventoAutenticacao.LOGIN_FALHA, "senha incorreta");
     }
 
     @Test
@@ -303,6 +310,8 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.login(request))
                 .isInstanceOf(CredenciaisInvalidasException.class)
                 .hasMessageContaining("inativa ou foi removida");
+        verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "a@a.com",
+                EventoAutenticacao.LOGIN_FALHA, "entidade vinculada inativa ou removida");
     }
 
     @Test
@@ -332,6 +341,7 @@ class AuthServiceTest {
         verify(refreshTokenRepository).save(captor.capture());
         assertThat(captor.getValue().getUsuario()).isEqualTo(usuario);
         assertThat(captor.getValue().getToken()).isEqualTo(response.getRefreshToken());
+        verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "a@a.com", EventoAutenticacao.LOGIN_SUCESSO, null);
     }
 
     @Test
@@ -378,6 +388,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.refresh(request))
                 .isInstanceOf(TokenInvalidoException.class)
                 .hasMessageContaining("revogado");
+        verify(autenticacaoAuditoriaService).registrar(null, null, EventoAutenticacao.REUSO_TOKEN_REVOGADO, null);
     }
 
     @Test
@@ -391,6 +402,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.refresh(request))
                 .isInstanceOf(TokenInvalidoException.class)
                 .hasMessageContaining("expirado");
+        verify(autenticacaoAuditoriaService).registrar(null, null, EventoAutenticacao.REFRESH_FALHA, "token expirado");
     }
 
     @Test
@@ -426,6 +438,7 @@ class AuthServiceTest {
         RefreshToken novoRt = captor.getAllValues().get(1);
         assertThat(novoRt.getToken()).isEqualTo(response.getRefreshToken());
         assertThat(novoRt.getUsuario()).isEqualTo(usuario);
+        verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "medico@a.com", EventoAutenticacao.REFRESH_SUCESSO, null);
     }
 
     // ---------- logout ----------
@@ -440,6 +453,7 @@ class AuthServiceTest {
 
         assertThat(rt.getRevogado()).isTrue();
         verify(refreshTokenRepository, times(1)).save(rt);
+        verify(autenticacaoAuditoriaService).registrar(null, null, EventoAutenticacao.LOGOUT, null);
     }
 
     @Test
