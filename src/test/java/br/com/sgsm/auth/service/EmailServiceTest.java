@@ -71,4 +71,22 @@ class EmailServiceTest {
 
         verify(mailSender, never()).send(any(MimeMessage.class));
     }
+
+    @Test
+    void enviarLinkResetSenha_deveEngolirExcecao_quandoEnvioFalha() {
+        when(mailSender.createMimeMessage()).thenThrow(new RuntimeException("smtp indisponivel"));
+
+        service.enviarLinkResetSenha("a@a.com", "Nome Teste", "token-123");
+
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void enviarConfirmacaoReset_deveEngolirExcecao_quandoEnvioFalha() {
+        when(mailSender.createMimeMessage()).thenThrow(new RuntimeException("smtp indisponivel"));
+
+        service.enviarConfirmacaoReset("a@a.com", "Nome Teste");
+
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
 }

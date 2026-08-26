@@ -244,6 +244,62 @@ class AuthServiceTest {
     }
 
     @Test
+    void registrar_deveLancarUsuarioJaExiste_quandoDesenvolvedorComEmailJaCadastrado() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+        when(usuarioRepository.existsByEmail("dev@a.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.registrar(request))
+                .isInstanceOf(UsuarioJaExisteException.class)
+                .hasMessageContaining("Email ja cadastrado");
+
+        verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
+    }
+
+    @Test
+    void registrar_deveCriarUsuarioDesenvolvedorSemReferenciaId_quandoTipoPerfilDesenvolvedor() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+        Role role = role("DESENVOLVEDOR");
+        when(usuarioRepository.existsByEmail("dev@a.com")).thenReturn(false);
+        when(roleRepository.findByNome("DESENVOLVEDOR")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
+
+        UUID novoId = UUID.randomUUID();
+        OffsetDateTime criadoEm = OffsetDateTime.now();
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+            Usuario usuario = invocation.getArgument(0);
+            ReflectionTestUtils.setField(usuario, "id", novoId);
+            ReflectionTestUtils.setField(usuario, "criadoEm", criadoEm);
+            return usuario;
+        });
+
+        var response = service.registrar(request);
+
+        assertThat(response.getId()).isEqualTo(novoId);
+        assertThat(response.getEmail()).isEqualTo("dev@a.com");
+        assertThat(response.getTipoPerfil()).isEqualTo("DESENVOLVEDOR");
+        assertThat(response.getReferenciaId()).isNull();
+        assertThat(response.getCriadoEm()).isEqualTo(criadoEm);
+
+        ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(captor.capture());
+        assertThat(captor.getValue().getSenhaHash()).isEqualTo("hash-senha");
+        assertThat(captor.getValue().getReferenciaId()).isNull();
+        assertThat(captor.getValue().getRoles()).containsExactly(role);
+        verify(emailService, never()).enviarBoasVindas(any(), any(), any(), any());
+    }
+
+    @Test
+    void registrar_deveLancarEntidadeNaoEncontrada_quandoFuncionarioNaoEncontradoPeloEmail() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
+        when(entidadeAuthRepository.findByEmailAndTipo("func@a.com", "FUNCIONARIO"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.registrar(request))
+                .isInstanceOf(EntidadeNaoEncontradaException.class)
+                .hasMessageContaining("Nenhum funcionario encontrado com email");
+    }
+
+    @Test
     void registrar_deveResolverEntidadePeloEmail_quandoFuncionarioSemReferenciaId() {
         var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
         EntidadeAuth entidade = entidadeAtiva("func@a.com", "FUNCIONARIO");
@@ -365,6 +421,25 @@ class AuthServiceTest {
                 eq("PACIENTE"), eq(referenciaId), anyList(), anyList());
     }
 
+    @Test
+    void login_deveUsarEmailComoNome_quandoTipoPerfilDesenvolvedor() {
+        var request = new LoginRequest("dev@a.com", "senha123");
+        Role role = role("DESENVOLVEDOR");
+        Usuario usuario = usuarioAtivo("dev@a.com", "hash", "DESENVOLVEDOR", role);
+
+        when(usuarioRepository.findByEmail("dev@a.com")).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("senha123", "hash")).thenReturn(true);
+        when(jwtService.gerarToken(any(), any(), any(), any(), any(), anyList(), anyList()))
+                .thenReturn("token");
+        when(jwtService.expiracaoEmSegundos()).thenReturn(900L);
+
+        service.login(request);
+
+        verify(jwtService).gerarToken(eq(usuario.getId()), eq("dev@a.com"), eq("dev@a.com"),
+                eq("DESENVOLVEDOR"), eq(referenciaId), anyList(), anyList());
+        verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
+    }
+
     // ---------- refresh ----------
 
     @Test
@@ -439,6 +514,86 @@ class AuthServiceTest {
         assertThat(novoRt.getToken()).isEqualTo(response.getRefreshToken());
         assertThat(novoRt.getUsuario()).isEqualTo(usuario);
         verify(autenticacaoAuditoriaService).registrar(usuario.getId(), "medico@a.com", EventoAutenticacao.REFRESH_SUCESSO, null);
+    }
+
+    @Test
+    void refresh_deveUsarEmailComoNome_quandoTipoPerfilDesenvolvedor() {
+        var request = new RefreshRequest("token-dev");
+        Role role = role("DESENVOLVEDOR");
+        Usuario usuario = usuarioAtivo("dev@a.com", "hash", "DESENVOLVEDOR", role);
+
+        RefreshToken rt = new RefreshToken();
+        rt.setUsuario(usuario);
+        rt.setRevogado(false);
+        rt.setExpiraEm(OffsetDateTime.now().plusDays(1));
+        when(refreshTokenRepository.findByToken("token-dev")).thenReturn(Optional.of(rt));
+        when(jwtService.gerarToken(any(), any(), any(), any(), any(), anyList(), anyList()))
+                .thenReturn("novo-token");
+        when(jwtService.expiracaoEmSegundos()).thenReturn(900L);
+
+        service.refresh(request);
+
+        verify(jwtService).gerarToken(eq(usuario.getId()), eq("dev@a.com"), eq("dev@a.com"),
+                eq("DESENVOLVEDOR"), eq(referenciaId), anyList(), anyList());
+        verify(entidadeAuthRepository, never()).findByReferenciaIdAndTipo(any(), any());
+    }
+
+    // ---------- loginPorOtp ----------
+
+    @Test
+    void loginPorOtp_deveLancarCredenciaisInvalidas_quandoUsuarioInativo() {
+        Role role = role("PACIENTE");
+        Usuario usuario = usuarioAtivo("a@a.com", "hash", "PACIENTE", role);
+        usuario.setAtivo(false);
+
+        assertThatThrownBy(() -> service.loginPorOtp(usuario))
+                .isInstanceOf(CredenciaisInvalidasException.class)
+                .hasMessageContaining("Usuário inativo.");
+
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void loginPorOtp_deveRetornarLoginResponseComTipoPerfil_quandoUsuarioAtivo() {
+        Role role = role("PACIENTE", permissao("AGENDA_LER"));
+        Usuario usuario = usuarioAtivo("a@a.com", "hash", "PACIENTE", role);
+        EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
+
+        when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
+                .thenReturn(Optional.of(entidade));
+        when(jwtService.gerarToken(eq(usuario.getId()), eq("a@a.com"), eq("Nome Teste"),
+                eq("PACIENTE"), eq(referenciaId), anyList(), anyList()))
+                .thenReturn("access-otp-token");
+        when(jwtService.expiracaoEmSegundos()).thenReturn(900L);
+
+        var response = service.loginPorOtp(usuario);
+
+        assertThat(response.getAccessToken()).isEqualTo("access-otp-token");
+        assertThat(response.getRefreshToken()).isNotBlank();
+        assertThat(response.getExpiresIn()).isEqualTo(900L);
+        assertThat(response.getTipoPerfil()).isEqualTo("PACIENTE");
+
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getUsuario()).isEqualTo(usuario);
+        assertThat(captor.getValue().getToken()).isEqualTo(response.getRefreshToken());
+    }
+
+    @Test
+    void loginPorOtp_deveUsarEmailComoNome_quandoEntidadeNaoEncontrada() {
+        Role role = role("PACIENTE");
+        Usuario usuario = usuarioAtivo("a@a.com", "hash", "PACIENTE", role);
+
+        when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
+                .thenReturn(Optional.empty());
+        when(jwtService.gerarToken(any(), any(), any(), any(), any(), anyList(), anyList()))
+                .thenReturn("access-otp-token");
+        when(jwtService.expiracaoEmSegundos()).thenReturn(900L);
+
+        service.loginPorOtp(usuario);
+
+        verify(jwtService).gerarToken(eq(usuario.getId()), eq("a@a.com"), eq("a@a.com"),
+                eq("PACIENTE"), eq(referenciaId), anyList(), anyList());
     }
 
     // ---------- logout ----------

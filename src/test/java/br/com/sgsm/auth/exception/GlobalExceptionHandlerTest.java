@@ -55,6 +55,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleTokenResetInvalido_deveRetornar400() {
+        var resposta = handler.handleTokenResetInvalido(
+                new TokenResetInvalidoException("Token de reset invalido."), request);
+
+        assertProblem(resposta, HttpStatus.BAD_REQUEST, "token-reset-invalido",
+                "Link de redefinição inválido", "Token de reset invalido.");
+    }
+
+    @Test
     void handleUsuarioJaExiste_deveRetornar409() {
         var resposta = handler.handleUsuarioJaExiste(
                 new UsuarioJaExisteException("Email ja cadastrado: a@a.com"), request);
