@@ -2,12 +2,15 @@ package br.com.sgsm.auth.service;
 
 import br.com.sgsm.auth.config.JwtProperties;
 import br.com.sgsm.auth.domain.EntidadeAuth;
+import br.com.sgsm.auth.domain.EventoAutenticacao;
 import br.com.sgsm.auth.domain.RefreshToken;
 import br.com.sgsm.auth.domain.Usuario;
 import br.com.sgsm.auth.dto.*;
 import br.com.sgsm.auth.exception.*;
 import br.com.sgsm.auth.repository.*;
 import io.jsonwebtoken.Claims;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,8 @@ import java.util.UUID;
 @Transactional
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR");
 
     private final UsuarioRepository usuarioRepository;
@@ -33,6 +38,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
     private final EmailService emailService;
+    private final AutenticacaoAuditoriaService autenticacaoAuditoriaService;
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -43,7 +49,8 @@ public class AuthService {
             JwtBlacklistService jwtBlacklistService,
             PasswordEncoder passwordEncoder,
             JwtProperties jwtProperties,
-            EmailService emailService
+            EmailService emailService,
+            AutenticacaoAuditoriaService autenticacaoAuditoriaService
     ) {
         this.usuarioRepository = usuarioRepository;
         this.roleRepository = roleRepository;
@@ -54,6 +61,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtProperties = jwtProperties;
         this.emailService = emailService;
+        this.autenticacaoAuditoriaService = autenticacaoAuditoriaService;
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +92,8 @@ public class AuthService {
             usuario.setRoles(Set.of(role));
 
             var salvo = usuarioRepository.save(usuario);
+            log.info("Usuario registrado: id={} email={} tipoPerfil=DESENVOLVEDOR", salvo.getId(), salvo.getEmail());
+            autenticacaoAuditoriaService.registrar(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=DESENVOLVEDOR");
 
             var response = new RegistrarResponse();
             response.setId(salvo.getId());
@@ -119,6 +129,7 @@ public class AuthService {
                     "O email informado nao corresponde ao registro referenciado.");
         }
         if (usuarioRepository.existsByEmail(request.email())) {
+            log.warn("Tentativa de registro com email ja cadastrado: {}", request.email());
             throw new UsuarioJaExisteException("Email ja cadastrado: " + request.email());
         }
 
@@ -139,6 +150,8 @@ public class AuthService {
 
         emailService.enviarBoasVindas(salvo.getEmail(), entidade.getNome(),
                 request.tipoPerfil(), senhaTextoClaro);
+        log.info("Usuario registrado: id={} email={} tipoPerfil={}", salvo.getId(), salvo.getEmail(), salvo.getTipoPerfil());
+        autenticacaoAuditoriaService.registrar(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=" + salvo.getTipoPerfil());
 
         var response = new RegistrarResponse();
         response.setId(salvo.getId());
@@ -151,12 +164,20 @@ public class AuthService {
 
     public LoginResponse login(LoginRequest request) {
         var usuario = usuarioRepository.findByEmail(request.email())
-                .orElseThrow(() -> new CredenciaisInvalidasException("Credenciais invalidas."));
+                .orElseThrow(() -> {
+                    log.warn("Login falhou: email nao cadastrado ({})", request.email());
+                    autenticacaoAuditoriaService.registrar(null, request.email(), EventoAutenticacao.LOGIN_FALHA, "email nao cadastrado");
+                    return new CredenciaisInvalidasException("Credenciais invalidas.");
+                });
 
         if (!usuario.getAtivo()) {
+            log.warn("Login falhou: usuario inativo (id={} email={})", usuario.getId(), usuario.getEmail());
+            autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "usuario inativo");
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
         if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
+            log.warn("Login falhou: senha incorreta (id={} email={})", usuario.getId(), usuario.getEmail());
+            autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "senha incorreta");
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
 
@@ -165,8 +186,13 @@ public class AuthService {
             entidadeAuthRepository
                     .findByReferenciaIdAndTipo(usuario.getReferenciaId(), usuario.getTipoPerfil())
                     .filter(e -> Boolean.TRUE.equals(e.getAtivo()))
-                    .orElseThrow(() -> new CredenciaisInvalidasException(
-                            "A entidade vinculada esta inativa ou foi removida."));
+                    .orElseThrow(() -> {
+                        log.warn("Login falhou: entidade vinculada inativa/removida (id={} email={} tipoPerfil={})",
+                                usuario.getId(), usuario.getEmail(), usuario.getTipoPerfil());
+                        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(),
+                                EventoAutenticacao.LOGIN_FALHA, "entidade vinculada inativa ou removida");
+                        return new CredenciaisInvalidasException("A entidade vinculada esta inativa ou foi removida.");
+                    });
         }
 
         List<String> roles = usuario.getRoles().stream()
@@ -197,6 +223,8 @@ public class AuthService {
         rt.setToken(tokenRefresh);
         rt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
         refreshTokenRepository.save(rt);
+        log.info("Login bem-sucedido: id={} email={} tipoPerfil={}", usuario.getId(), usuario.getEmail(), usuario.getTipoPerfil());
+        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_SUCESSO, null);
 
         return new LoginResponse(accessToken, tokenRefresh, jwtService.expiracaoEmSegundos());
     }
@@ -206,9 +234,20 @@ public class AuthService {
                 .orElseThrow(() -> new TokenInvalidoException("Refresh token invalido."));
 
         if (Boolean.TRUE.equals(rt.getRevogado())) {
+            // Reuso de refresh token ja revogado (rotacao) — indicio de token vazado/roubado.
+            UUID usuarioIdRevogado = rt.getUsuario() != null ? rt.getUsuario().getId() : null;
+            String emailRevogado = rt.getUsuario() != null ? rt.getUsuario().getEmail() : null;
+            log.warn("Possivel reuso de refresh token revogado detectado: usuarioId={} email={}",
+                    usuarioIdRevogado, emailRevogado);
+            autenticacaoAuditoriaService.registrar(usuarioIdRevogado, emailRevogado, EventoAutenticacao.REUSO_TOKEN_REVOGADO, null);
             throw new TokenInvalidoException("Refresh token revogado.");
         }
         if (rt.getExpiraEm().isBefore(OffsetDateTime.now())) {
+            UUID usuarioIdExpirado = rt.getUsuario() != null ? rt.getUsuario().getId() : null;
+            log.warn("Refresh falhou: token expirado (usuarioId={})", usuarioIdExpirado);
+            autenticacaoAuditoriaService.registrar(usuarioIdExpirado,
+                    rt.getUsuario() != null ? rt.getUsuario().getEmail() : null,
+                    EventoAutenticacao.REFRESH_FALHA, "token expirado");
             throw new TokenInvalidoException("Refresh token expirado.");
         }
 
@@ -240,6 +279,8 @@ public class AuthService {
         novoRt.setToken(novoRefreshToken);
         novoRt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
         refreshTokenRepository.save(novoRt);
+        log.info("Refresh bem-sucedido: usuarioId={} email={}", usuario.getId(), usuario.getEmail());
+        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.REFRESH_SUCESSO, null);
 
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
@@ -297,6 +338,10 @@ public class AuthService {
         refreshTokenRepository.findByToken(refreshTokenStr).ifPresent(rt -> {
             rt.setRevogado(true);
             refreshTokenRepository.save(rt);
+            UUID usuarioId = rt.getUsuario() != null ? rt.getUsuario().getId() : null;
+            String email = rt.getUsuario() != null ? rt.getUsuario().getEmail() : null;
+            log.info("Logout: usuarioId={} email={}", usuarioId, email);
+            autenticacaoAuditoriaService.registrar(usuarioId, email, EventoAutenticacao.LOGOUT, null);
         });
     }
 
