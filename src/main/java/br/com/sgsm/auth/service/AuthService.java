@@ -93,7 +93,7 @@ public class AuthService {
 
             var salvo = usuarioRepository.save(usuario);
             log.info("Usuario registrado: id={} email={} tipoPerfil=DESENVOLVEDOR", salvo.getId(), salvo.getEmail());
-            autenticacaoAuditoriaService.registrar(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=DESENVOLVEDOR");
+            registrarAuditoria(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=DESENVOLVEDOR");
 
             var response = new RegistrarResponse();
             response.setId(salvo.getId());
@@ -151,7 +151,7 @@ public class AuthService {
         emailService.enviarBoasVindas(salvo.getEmail(), entidade.getNome(),
                 request.tipoPerfil(), senhaTextoClaro);
         log.info("Usuario registrado: id={} email={} tipoPerfil={}", salvo.getId(), salvo.getEmail(), salvo.getTipoPerfil());
-        autenticacaoAuditoriaService.registrar(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=" + salvo.getTipoPerfil());
+        registrarAuditoria(salvo.getId(), salvo.getEmail(), EventoAutenticacao.REGISTRO, "tipoPerfil=" + salvo.getTipoPerfil());
 
         var response = new RegistrarResponse();
         response.setId(salvo.getId());
@@ -166,18 +166,18 @@ public class AuthService {
         var usuario = usuarioRepository.findByEmail(request.email())
                 .orElseThrow(() -> {
                     log.warn("Login falhou: email nao cadastrado ({})", request.email());
-                    autenticacaoAuditoriaService.registrar(null, request.email(), EventoAutenticacao.LOGIN_FALHA, "email nao cadastrado");
+                    registrarAuditoria(null, request.email(), EventoAutenticacao.LOGIN_FALHA, "email nao cadastrado");
                     return new CredenciaisInvalidasException("Credenciais invalidas.");
                 });
 
         if (!usuario.getAtivo()) {
             log.warn("Login falhou: usuario inativo (id={} email={})", usuario.getId(), usuario.getEmail());
-            autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "usuario inativo");
+            registrarAuditoria(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "usuario inativo");
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
         if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
             log.warn("Login falhou: senha incorreta (id={} email={})", usuario.getId(), usuario.getEmail());
-            autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "senha incorreta");
+            registrarAuditoria(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "senha incorreta");
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
 
@@ -189,7 +189,7 @@ public class AuthService {
                     .orElseThrow(() -> {
                         log.warn("Login falhou: entidade vinculada inativa/removida (id={} email={} tipoPerfil={})",
                                 usuario.getId(), usuario.getEmail(), usuario.getTipoPerfil());
-                        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(),
+                        registrarAuditoria(usuario.getId(), usuario.getEmail(),
                                 EventoAutenticacao.LOGIN_FALHA, "entidade vinculada inativa ou removida");
                         return new CredenciaisInvalidasException("A entidade vinculada esta inativa ou foi removida.");
                     });
@@ -224,7 +224,7 @@ public class AuthService {
         rt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
         refreshTokenRepository.save(rt);
         log.info("Login bem-sucedido: id={} email={} tipoPerfil={}", usuario.getId(), usuario.getEmail(), usuario.getTipoPerfil());
-        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_SUCESSO, null);
+        registrarAuditoria(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_SUCESSO, null);
 
         return new LoginResponse(accessToken, tokenRefresh, jwtService.expiracaoEmSegundos());
     }
@@ -239,13 +239,13 @@ public class AuthService {
             String emailRevogado = rt.getUsuario() != null ? rt.getUsuario().getEmail() : null;
             log.warn("Possivel reuso de refresh token revogado detectado: usuarioId={} email={}",
                     usuarioIdRevogado, emailRevogado);
-            autenticacaoAuditoriaService.registrar(usuarioIdRevogado, emailRevogado, EventoAutenticacao.REUSO_TOKEN_REVOGADO, null);
+            registrarAuditoria(usuarioIdRevogado, emailRevogado, EventoAutenticacao.REUSO_TOKEN_REVOGADO, null);
             throw new TokenInvalidoException("Refresh token revogado.");
         }
         if (rt.getExpiraEm().isBefore(OffsetDateTime.now())) {
             UUID usuarioIdExpirado = rt.getUsuario() != null ? rt.getUsuario().getId() : null;
             log.warn("Refresh falhou: token expirado (usuarioId={})", usuarioIdExpirado);
-            autenticacaoAuditoriaService.registrar(usuarioIdExpirado,
+            registrarAuditoria(usuarioIdExpirado,
                     rt.getUsuario() != null ? rt.getUsuario().getEmail() : null,
                     EventoAutenticacao.REFRESH_FALHA, "token expirado");
             throw new TokenInvalidoException("Refresh token expirado.");
@@ -280,7 +280,7 @@ public class AuthService {
         novoRt.setExpiraEm(OffsetDateTime.now().plusDays(jwtProperties.refreshExpiracaoDias()));
         refreshTokenRepository.save(novoRt);
         log.info("Refresh bem-sucedido: usuarioId={} email={}", usuario.getId(), usuario.getEmail());
-        autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.REFRESH_SUCESSO, null);
+        registrarAuditoria(usuario.getId(), usuario.getEmail(), EventoAutenticacao.REFRESH_SUCESSO, null);
 
         return new RefreshResponse(novoAccessToken, novoRefreshToken, jwtService.expiracaoEmSegundos());
     }
@@ -341,7 +341,7 @@ public class AuthService {
             UUID usuarioId = rt.getUsuario() != null ? rt.getUsuario().getId() : null;
             String email = rt.getUsuario() != null ? rt.getUsuario().getEmail() : null;
             log.info("Logout: usuarioId={} email={}", usuarioId, email);
-            autenticacaoAuditoriaService.registrar(usuarioId, email, EventoAutenticacao.LOGOUT, null);
+            registrarAuditoria(usuarioId, email, EventoAutenticacao.LOGOUT, null);
         });
     }
 
@@ -360,5 +360,16 @@ public class AuthService {
         response.setRoles(claims.get("roles", List.class));
         response.setPermissions(claims.get("permissions", List.class));
         return response;
+    }
+
+    // Auditoria roda em transação própria (ver AutenticacaoAuditoriaService); uma falha ali
+    // (ex.: banco indisponível) não pode impedir login/registro/refresh que já foi concluído,
+    // só fica registrada em log.
+    private void registrarAuditoria(UUID usuarioId, String email, EventoAutenticacao evento, String detalhe) {
+        try {
+            autenticacaoAuditoriaService.registrar(usuarioId, email, evento, detalhe);
+        } catch (Exception e) {
+            log.warn("Falha ao registrar auditoria de autenticacao {} para {}: {}", evento, email, e.getMessage());
+        }
     }
 }
