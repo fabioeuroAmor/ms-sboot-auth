@@ -154,6 +154,9 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- APM Glowroot: agente anexado automaticamente no "mvn spring-boot:run".
+                         UI standalone deste servico em http://localhost:4001 -->
+                    <jvmArguments>-javaagent:C:/AmbienteDev/glowroot/glowroot/glowroot.jar -Dglowroot.conf.dir=C:/AmbienteDev/glowroot/data/ms-sboot-auth -Dglowroot.data.dir=C:/AmbienteDev/glowroot/data/ms-sboot-auth -Dglowroot.log.dir=C:/AmbienteDev/glowroot/data/ms-sboot-auth -Dglowroot.tmp.dir=C:/AmbienteDev/glowroot/data/ms-sboot-auth</jvmArguments>
                 </configuration>
             </plugin>
 
