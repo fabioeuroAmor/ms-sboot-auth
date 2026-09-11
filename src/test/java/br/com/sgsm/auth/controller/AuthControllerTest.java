@@ -14,6 +14,7 @@ import br.com.sgsm.auth.dto.RegistrarResponse;
 import br.com.sgsm.auth.dto.ResetarSenhaRequest;
 import br.com.sgsm.auth.service.AuthService;
 import br.com.sgsm.auth.service.ResetSenhaService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,8 @@ class AuthControllerTest {
     private AuthService authService;
     @Mock
     private ResetSenhaService resetSenhaService;
+    @Mock
+    private HttpServletRequest httpServletRequest;
 
     private AuthController controller;
 
@@ -56,9 +59,10 @@ class AuthControllerTest {
 
     @Test
     void emailDisponivel_deveRetornarOkComResultadoDoService() {
-        when(authService.emailDisponivel("livre@a.com")).thenReturn(true);
+        when(httpServletRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(authService.emailDisponivel("livre@a.com", "127.0.0.1")).thenReturn(true);
 
-        var resposta = controller.emailDisponivel("livre@a.com");
+        var resposta = controller.emailDisponivel("livre@a.com", httpServletRequest);
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resposta.getBody()).isEqualTo(new EmailDisponivelResponse(true));

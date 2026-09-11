@@ -68,6 +68,8 @@ class AuthServiceTest {
     private EmailService emailService;
     @Mock
     private AutenticacaoAuditoriaService autenticacaoAuditoriaService;
+    @Mock
+    private RateLimiterService rateLimiter;
 
     private AuthService service;
 
@@ -78,7 +80,7 @@ class AuthServiceTest {
         JwtProperties jwtProperties = new JwtProperties("secret", 15, 7);
         service = new AuthService(usuarioRepository, roleRepository, refreshTokenRepository,
                 entidadeAuthRepository, jwtService, jwtBlacklistService, passwordEncoder, jwtProperties,
-                emailService, autenticacaoAuditoriaService);
+                emailService, autenticacaoAuditoriaService, rateLimiter);
     }
 
     private EntidadeAuth entidadeAtiva(String email, String tipo) {
@@ -122,14 +124,24 @@ class AuthServiceTest {
     void emailDisponivel_deveRetornarTrue_quandoEmailNaoCadastrado() {
         when(usuarioRepository.existsByEmail("livre@a.com")).thenReturn(false);
 
-        assertThat(service.emailDisponivel("livre@a.com")).isTrue();
+        assertThat(service.emailDisponivel("livre@a.com", "127.0.0.1")).isTrue();
     }
 
     @Test
     void emailDisponivel_deveRetornarFalse_quandoEmailJaCadastrado() {
         when(usuarioRepository.existsByEmail("ocupado@a.com")).thenReturn(true);
 
-        assertThat(service.emailDisponivel("ocupado@a.com")).isFalse();
+        assertThat(service.emailDisponivel("ocupado@a.com", "127.0.0.1")).isFalse();
+    }
+
+    @Test
+    void emailDisponivel_deveLancarIllegalArgument_quandoLimiteDeVerificacoesExcedido() {
+        when(rateLimiter.limiteExcedido(eq("auth:email-check:127.0.0.1"), eq(20))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.emailDisponivel("qualquer@a.com", "127.0.0.1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Muitas verificações");
+        verify(usuarioRepository, never()).existsByEmail(any());
     }
 
     // ---------- registrar ----------
@@ -263,6 +275,17 @@ class AuthServiceTest {
     }
 
     // ---------- login ----------
+
+    @Test
+    void login_deveLancarCredenciaisInvalidas_quandoLimiteDeTentativasExcedido() {
+        var request = new LoginRequest("a@a.com", "senha123");
+        when(rateLimiter.limiteExcedido(eq("auth:login:tentativas:a@a.com"), eq(5))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.login(request))
+                .isInstanceOf(CredenciaisInvalidasException.class)
+                .hasMessageContaining("Muitas tentativas");
+        verify(usuarioRepository, never()).findByEmail(any());
+    }
 
     @Test
     void login_deveLancarCredenciaisInvalidas_quandoUsuarioNaoExiste() {
