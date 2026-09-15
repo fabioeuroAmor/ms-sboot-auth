@@ -29,6 +29,14 @@ public class AuthService {
 
     private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR");
 
+    private static final String LOGIN_TENTATIVAS_PREFIX = "auth:login:tentativas:";
+    private static final int MAX_TENTATIVAS_LOGIN = 5;
+    private static final long JANELA_LOGIN_SEGUNDOS = 900L; // 15 minutos
+
+    private static final String EMAIL_CHECK_PREFIX = "auth:email-check:";
+    private static final int MAX_EMAIL_CHECKS = 20;
+    private static final long JANELA_EMAIL_CHECK_SEGUNDOS = 900L; // 15 minutos
+
     private final UsuarioRepository usuarioRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -39,6 +47,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final EmailService emailService;
     private final AutenticacaoAuditoriaService autenticacaoAuditoriaService;
+    private final RateLimiterService rateLimiter;
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -50,7 +59,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtProperties jwtProperties,
             EmailService emailService,
-            AutenticacaoAuditoriaService autenticacaoAuditoriaService
+            AutenticacaoAuditoriaService autenticacaoAuditoriaService,
+            RateLimiterService rateLimiter
     ) {
         this.usuarioRepository = usuarioRepository;
         this.roleRepository = roleRepository;
@@ -62,10 +72,18 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.emailService = emailService;
         this.autenticacaoAuditoriaService = autenticacaoAuditoriaService;
+        this.rateLimiter = rateLimiter;
     }
 
+    // Limitado por IP (não por e-mail, já que o objetivo aqui é impedir uma varredura
+    // automatizada testando muitos e-mails, não travar um usuário legítimo).
     @Transactional(readOnly = true)
-    public boolean emailDisponivel(String email) {
+    public boolean emailDisponivel(String email, String ip) {
+        String chave = EMAIL_CHECK_PREFIX + ip;
+        if (rateLimiter.limiteExcedido(chave, MAX_EMAIL_CHECKS)) {
+            throw new IllegalArgumentException("Muitas verificações de e-mail. Tente novamente mais tarde.");
+        }
+        rateLimiter.incrementar(chave, JANELA_EMAIL_CHECK_SEGUNDOS);
         return !usuarioRepository.existsByEmail(email);
     }
 
@@ -163,23 +181,34 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
+        String tentativasKey = LOGIN_TENTATIVAS_PREFIX + request.email().toLowerCase(Locale.ROOT);
+        if (rateLimiter.limiteExcedido(tentativasKey, MAX_TENTATIVAS_LOGIN)) {
+            log.warn("Login bloqueado por rate limit ({})", request.email());
+            autenticacaoAuditoriaService.registrar(null, request.email(), EventoAutenticacao.LOGIN_FALHA, "rate limit excedido");
+            throw new CredenciaisInvalidasException("Muitas tentativas de login. Tente novamente em alguns minutos.");
+        }
+
         var usuario = usuarioRepository.findByEmail(request.email())
                 .orElseThrow(() -> {
                     log.warn("Login falhou: email nao cadastrado ({})", request.email());
                     autenticacaoAuditoriaService.registrar(null, request.email(), EventoAutenticacao.LOGIN_FALHA, "email nao cadastrado");
+                    rateLimiter.incrementar(tentativasKey, JANELA_LOGIN_SEGUNDOS);
                     return new CredenciaisInvalidasException("Credenciais invalidas.");
                 });
 
         if (!usuario.getAtivo()) {
             log.warn("Login falhou: usuario inativo (id={} email={})", usuario.getId(), usuario.getEmail());
             autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "usuario inativo");
+            rateLimiter.incrementar(tentativasKey, JANELA_LOGIN_SEGUNDOS);
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
         if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
             log.warn("Login falhou: senha incorreta (id={} email={})", usuario.getId(), usuario.getEmail());
             autenticacaoAuditoriaService.registrar(usuario.getId(), usuario.getEmail(), EventoAutenticacao.LOGIN_FALHA, "senha incorreta");
+            rateLimiter.incrementar(tentativasKey, JANELA_LOGIN_SEGUNDOS);
             throw new CredenciaisInvalidasException("Credenciais invalidas.");
         }
+        rateLimiter.resetar(tentativasKey);
 
         // Valida que a entidade sgsm ainda esta ativa (DESENVOLVEDOR nao tem entidade)
         if (!"DESENVOLVEDOR".equals(usuario.getTipoPerfil())) {

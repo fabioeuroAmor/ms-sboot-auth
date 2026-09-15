@@ -3,6 +3,7 @@ package br.com.sgsm.auth.controller;
 import br.com.sgsm.auth.dto.*;
 import br.com.sgsm.auth.service.AuthService;
 import br.com.sgsm.auth.service.ResetSenhaService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,8 +29,10 @@ public class AuthController {
     // UC - Checar disponibilidade de e-mail antes de iniciar um auto-cadastro
     // (evita criar um medico/paciente orfao no sgsm quando o e-mail ja esta em uso)
     @GetMapping("/email-disponivel")
-    public ResponseEntity<EmailDisponivelResponse> emailDisponivel(@RequestParam String email) {
-        return ResponseEntity.ok(new EmailDisponivelResponse(service.emailDisponivel(email)));
+    public ResponseEntity<EmailDisponivelResponse> emailDisponivel(
+            @RequestParam String email, HttpServletRequest request) {
+        return ResponseEntity.ok(new EmailDisponivelResponse(
+                service.emailDisponivel(email, request.getRemoteAddr())));
     }
 
     // UC - Autenticar e obter tokens
