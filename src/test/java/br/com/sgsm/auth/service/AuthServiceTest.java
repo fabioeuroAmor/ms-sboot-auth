@@ -13,6 +13,7 @@ import br.com.sgsm.auth.dto.RefreshRequest;
 import br.com.sgsm.auth.dto.RegistrarRequest;
 import br.com.sgsm.auth.exception.CredenciaisInvalidasException;
 import br.com.sgsm.auth.exception.EntidadeNaoEncontradaException;
+import br.com.sgsm.auth.exception.PermissaoNegadaException;
 import br.com.sgsm.auth.exception.TokenInvalidoException;
 import br.com.sgsm.auth.exception.UsuarioJaExisteException;
 import br.com.sgsm.auth.repository.EntidadeAuthRepository;
@@ -144,68 +145,97 @@ class AuthServiceTest {
         verify(usuarioRepository, never()).existsByEmail(any());
     }
 
-    // ---------- registrar ----------
+    // ---------- registrarPublico ----------
 
     @Test
-    void registrar_deveLancarIllegalArgument_quandoTipoPerfilInvalido() {
+    void registrarPublico_deveLancarIllegalArgument_quandoTipoPerfilInvalido() {
         var request = new RegistrarRequest("a@a.com", "senha123", "INVALIDO", referenciaId);
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tipoPerfil invalido");
     }
 
     @Test
-    void registrar_deveLancarEntidadeNaoEncontrada_quandoEntidadeNaoExiste() {
+    void registrarPublico_deveLancarIllegalArgument_quandoTipoPerfilEhFuncionario() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
+
+        assertThatThrownBy(() -> service.registrarPublico(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("auto-cadastro publico");
+    }
+
+    @Test
+    void registrarPublico_deveLancarIllegalArgument_quandoTipoPerfilEhDesenvolvedor() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+
+        assertThatThrownBy(() -> service.registrarPublico(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("auto-cadastro publico");
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarPublico_deveLancarIllegalArgument_quandoTipoPerfilEhAdminEstabelecimento() {
+        var request = new RegistrarRequest("admin@a.com", "senha123", "ADMIN_ESTABELECIMENTO", referenciaId);
+
+        assertThatThrownBy(() -> service.registrarPublico(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("auto-cadastro publico");
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarPublico_deveLancarEntidadeNaoEncontrada_quandoEntidadeNaoExiste() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
         when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(EntidadeNaoEncontradaException.class)
                 .hasMessageContaining("Nenhum registro ativo encontrado");
     }
 
     @Test
-    void registrar_deveLancarEntidadeNaoEncontrada_quandoEntidadeInativa() {
+    void registrarPublico_deveLancarEntidadeNaoEncontrada_quandoEntidadeInativa() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
         ReflectionTestUtils.setField(entidade, "ativo", false);
         when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
                 .thenReturn(Optional.of(entidade));
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(EntidadeNaoEncontradaException.class)
                 .hasMessageContaining("inativa");
     }
 
     @Test
-    void registrar_deveLancarCredenciaisInvalidas_quandoEmailNaoCorresponde() {
+    void registrarPublico_deveLancarCredenciaisInvalidas_quandoEmailNaoCorresponde() {
         var request = new RegistrarRequest("outro@a.com", "senha123", "PACIENTE", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
         when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
                 .thenReturn(Optional.of(entidade));
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(CredenciaisInvalidasException.class)
                 .hasMessageContaining("nao corresponde");
     }
 
     @Test
-    void registrar_deveLancarUsuarioJaExiste_quandoEmailJaCadastrado() {
+    void registrarPublico_deveLancarUsuarioJaExiste_quandoEmailJaCadastrado() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
         when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
                 .thenReturn(Optional.of(entidade));
         when(usuarioRepository.existsByEmail("a@a.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(UsuarioJaExisteException.class)
                 .hasMessageContaining("Email ja cadastrado");
     }
 
     @Test
-    void registrar_deveLancarEntidadeNaoEncontrada_quandoRoleNaoExiste() {
+    void registrarPublico_deveLancarEntidadeNaoEncontrada_quandoRoleNaoExiste() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
         when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "PACIENTE"))
@@ -213,13 +243,13 @@ class AuthServiceTest {
         when(usuarioRepository.existsByEmail("a@a.com")).thenReturn(false);
         when(roleRepository.findByNome("PACIENTE")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.registrar(request))
+        assertThatThrownBy(() -> service.registrarPublico(request))
                 .isInstanceOf(EntidadeNaoEncontradaException.class)
                 .hasMessageContaining("Role nao encontrada");
     }
 
     @Test
-    void registrar_deveCriarUsuario_quandoDadosValidos() {
+    void registrarPublico_deveCriarUsuario_quandoDadosValidos() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("a@a.com", "PACIENTE");
         Role role = role("PACIENTE");
@@ -238,7 +268,7 @@ class AuthServiceTest {
             return usuario;
         });
 
-        var response = service.registrar(request);
+        var response = service.registrarPublico(request);
 
         assertThat(response.getId()).isEqualTo(novoId);
         assertThat(response.getEmail()).isEqualTo("a@a.com");
@@ -255,8 +285,66 @@ class AuthServiceTest {
         verify(autenticacaoAuditoriaService).registrar(novoId, "a@a.com", EventoAutenticacao.REGISTRO, "tipoPerfil=PACIENTE");
     }
 
+    // ---------- registrarStaff ----------
+
+    private String tokenComRoles(String... roles) {
+        Claims claims = mock(Claims.class);
+        when(claims.get("roles", List.class)).thenReturn(List.of(roles));
+        when(jwtService.extrairClaims("token-staff")).thenReturn(claims);
+        return "Bearer token-staff";
+    }
+
     @Test
-    void registrar_deveAceitarAdminEstabelecimentoComoTipoPerfilValido() {
+    void registrarStaff_deveLancarIllegalArgument_quandoTipoPerfilForaDoPermitido() {
+        var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", referenciaId);
+
+        // tipoPerfil e validado antes do token ser inspecionado - nenhum stub de jwtService necessario
+        assertThatThrownBy(() -> service.registrarStaff(request, "Bearer qualquer-token"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cadastro assistido");
+    }
+
+    @Test
+    void registrarStaff_deveLancarTokenInvalido_quandoBearerAusente() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
+
+        assertThatThrownBy(() -> service.registrarStaff(request, null))
+                .isInstanceOf(TokenInvalidoException.class);
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarStaff_deveLancarPermissaoNegada_quandoChamadorNaoEhStaff() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
+
+        assertThatThrownBy(() -> service.registrarStaff(request, tokenComRoles("PACIENTE")))
+                .isInstanceOf(PermissaoNegadaException.class)
+                .hasMessageContaining("staff");
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarStaff_deveLancarPermissaoNegada_quandoNaoDesenvolvedorTentaCriarDesenvolvedor() {
+        var request = new RegistrarRequest("dev@a.com", "senha123", "DESENVOLVEDOR", null);
+
+        assertThatThrownBy(() -> service.registrarStaff(request, tokenComRoles("MEDICO")))
+                .isInstanceOf(PermissaoNegadaException.class)
+                .hasMessageContaining("DESENVOLVEDOR");
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarStaff_deveLancarPermissaoNegada_quandoNaoDesenvolvedorTentaCriarAdminEstabelecimento() {
+        var request = new RegistrarRequest("admin@a.com", "senha123", "ADMIN_ESTABELECIMENTO", referenciaId);
+
+        assertThatThrownBy(() -> service.registrarStaff(request, tokenComRoles("FUNCIONARIO")))
+                .isInstanceOf(PermissaoNegadaException.class)
+                .hasMessageContaining("DESENVOLVEDOR");
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarStaff_deveAceitarAdminEstabelecimento_quandoChamadorEhDesenvolvedor() {
         var request = new RegistrarRequest("admin@a.com", "senha123", "ADMIN_ESTABELECIMENTO", referenciaId);
         EntidadeAuth entidade = entidadeAtiva("admin@a.com", "ADMIN_ESTABELECIMENTO");
         Role role = role("ADMIN_ESTABELECIMENTO");
@@ -267,13 +355,13 @@ class AuthServiceTest {
         when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service.registrar(request);
+        var response = service.registrarStaff(request, tokenComRoles("DESENVOLVEDOR"));
 
         assertThat(response.getTipoPerfil()).isEqualTo("ADMIN_ESTABELECIMENTO");
     }
 
     @Test
-    void registrar_deveResolverEntidadePeloEmail_quandoFuncionarioSemReferenciaId() {
+    void registrarStaff_deveResolverEntidadePeloEmail_quandoFuncionarioSemReferenciaId() {
         var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
         EntidadeAuth entidade = entidadeAtiva("func@a.com", "FUNCIONARIO");
         Role role = role("FUNCIONARIO");
@@ -284,7 +372,9 @@ class AuthServiceTest {
         when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service.registrar(request);
+        // MEDICO (nao-DESENVOLVEDOR) pode criar login de FUNCIONARIO - so DESENVOLVEDOR/
+        // ADMIN_ESTABELECIMENTO exigem especificamente o chamador ser DESENVOLVEDOR.
+        var response = service.registrarStaff(request, tokenComRoles("MEDICO"));
 
         assertThat(response.getReferenciaId()).isEqualTo(referenciaId);
         verify(entidadeAuthRepository).findByEmailAndTipo("func@a.com", "FUNCIONARIO");

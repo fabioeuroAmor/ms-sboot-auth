@@ -29,6 +29,22 @@ public class AuthService {
 
     private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR", "ADMIN_ESTABELECIMENTO");
 
+    // MEDICO/PACIENTE continuam self-service (auto-cadastro publico). Os demais exigem que
+    // quem chama ja esteja autenticado como staff — ver registrarStaff().
+    private static final Set<String> PERFIS_PUBLICOS = Set.of("MEDICO", "PACIENTE");
+    private static final Set<String> PERFIS_STAFF = Set.of("DESENVOLVEDOR", "ADMIN_ESTABELECIMENTO", "FUNCIONARIO");
+    // DESENVOLVEDOR e ADMIN_ESTABELECIMENTO sao identidades estruturais do sistema (acesso
+    // irrestrito / dono de estabelecimento) — só um DESENVOLVEDOR pode criar o login delas.
+    // FUNCIONARIO fica de fora dessa lista: quem ja pode cadastrar um funcionario (MEDICO,
+    // FUNCIONARIO, ADMIN_ESTABELECIMENTO ou DESENVOLVEDOR) tambem pode criar o login dele.
+    private static final Set<String> PERFIS_STAFF_DESENVOLVEDOR_ONLY = Set.of("DESENVOLVEDOR", "ADMIN_ESTABELECIMENTO");
+    // Roles que podem chamar /registrar-staff (indepentende de qual tipoPerfil estao criando —
+    // a restricao fina de DESENVOLVEDOR/ADMIN_ESTABELECIMENTO acontece a parte).
+    // Nota: este servico nao tem um JwtAuthFilter/SecurityContext (todo endpoint aqui e
+    // permitAll e faz a propria validacao manual do Bearer token, mesmo padrao de me()/
+    // alterarSenha()) — por isso essa checagem fica no service, nao no SecurityConfig.
+    private static final Set<String> ROLES_CHAMADOR_STAFF_VALIDAS = Set.of("DESENVOLVEDOR", "MEDICO", "FUNCIONARIO", "ADMIN_ESTABELECIMENTO");
+
     private static final String LOGIN_TENTATIVAS_PREFIX = "auth:login:tentativas:";
     private static final int MAX_TENTATIVAS_LOGIN = 5;
     private static final long JANELA_LOGIN_SEGUNDOS = 900L; // 15 minutos
@@ -87,7 +103,46 @@ public class AuthService {
         return !usuarioRepository.existsByEmail(email);
     }
 
-    public RegistrarResponse registrar(RegistrarRequest request) {
+    // UC - Auto-cadastro publico (sem autenticacao) — só MEDICO e PACIENTE.
+    public RegistrarResponse registrarPublico(RegistrarRequest request) {
+        if (!PERFIS_PUBLICOS.contains(request.tipoPerfil())) {
+            throw new IllegalArgumentException(
+                    "tipoPerfil invalido para auto-cadastro publico. Valores aceitos: " + PERFIS_PUBLICOS);
+        }
+        return registrarInterno(request);
+    }
+
+    // UC - Cadastro assistido por staff autenticado — DESENVOLVEDOR, ADMIN_ESTABELECIMENTO ou
+    // FUNCIONARIO. Exige um Bearer token valido de alguem ja autenticado como staff; só
+    // DESENVOLVEDOR pode criar login de DESENVOLVEDOR/ADMIN_ESTABELECIMENTO.
+    public RegistrarResponse registrarStaff(RegistrarRequest request, String bearerToken) {
+        if (!PERFIS_STAFF.contains(request.tipoPerfil())) {
+            throw new IllegalArgumentException(
+                    "tipoPerfil invalido para cadastro assistido. Valores aceitos: " + PERFIS_STAFF);
+        }
+
+        List<String> rolesChamador = extrairRolesDoChamador(bearerToken);
+        if (rolesChamador.stream().noneMatch(ROLES_CHAMADOR_STAFF_VALIDAS::contains)) {
+            throw new PermissaoNegadaException("Autenticacao de staff necessaria para este cadastro.");
+        }
+        if (PERFIS_STAFF_DESENVOLVEDOR_ONLY.contains(request.tipoPerfil()) && !rolesChamador.contains("DESENVOLVEDOR")) {
+            throw new PermissaoNegadaException(
+                    "Somente DESENVOLVEDOR pode cadastrar login de tipoPerfil=" + request.tipoPerfil());
+        }
+        return registrarInterno(request);
+    }
+
+    private List<String> extrairRolesDoChamador(String bearerToken) {
+        if (bearerToken == null || !bearerToken.startsWith("Bearer ")) {
+            throw new TokenInvalidoException("Token de autenticacao ausente ou invalido.");
+        }
+        Claims claims = jwtService.extrairClaims(bearerToken.replace("Bearer ", ""));
+        @SuppressWarnings("unchecked")
+        List<String> roles = claims.get("roles", List.class);
+        return roles != null ? roles : List.of();
+    }
+
+    private RegistrarResponse registrarInterno(RegistrarRequest request) {
         if (!PERFIS_VALIDOS.contains(request.tipoPerfil())) {
             throw new IllegalArgumentException(
                     "tipoPerfil invalido. Valores aceitos: " + PERFIS_VALIDOS);

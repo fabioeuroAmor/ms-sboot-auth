@@ -49,9 +49,21 @@ class AuthControllerTest {
     void registrar_deveRetornarCreatedComCorpoDoService() {
         var request = new RegistrarRequest("a@a.com", "senha123", "PACIENTE", UUID.randomUUID());
         var esperado = new RegistrarResponse();
-        when(authService.registrar(request)).thenReturn(esperado);
+        when(authService.registrarPublico(request)).thenReturn(esperado);
 
         var resposta = controller.registrar(request);
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(resposta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void registrarStaff_deveRetornarCreatedComCorpoDoService() {
+        var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", UUID.randomUUID());
+        var esperado = new RegistrarResponse();
+        when(authService.registrarStaff(request, "Bearer token-staff")).thenReturn(esperado);
+
+        var resposta = controller.registrarStaff(request, "Bearer token-staff");
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(resposta.getBody()).isSameAs(esperado);

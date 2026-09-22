@@ -20,10 +20,17 @@ public class AuthController {
         this.resetSenhaService = resetSenhaService;
     }
 
-    // UC - Registrar usuario vinculado a entidade sgsm
+    // UC - Auto-cadastro publico vinculado a entidade sgsm (MEDICO/PACIENTE)
     @PostMapping("/registrar")
     public ResponseEntity<RegistrarResponse> registrar(@RequestBody RegistrarRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.registrar(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.registrarPublico(request));
+    }
+
+    // UC - Cadastro assistido por staff autenticado (DESENVOLVEDOR/ADMIN_ESTABELECIMENTO/FUNCIONARIO)
+    @PostMapping("/registrar-staff")
+    public ResponseEntity<RegistrarResponse> registrarStaff(@RequestBody RegistrarRequest request,
+                                                              @RequestHeader(value = "Authorization", required = false) String authorization) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.registrarStaff(request, authorization));
     }
 
     // UC - Checar disponibilidade de e-mail antes de iniciar um auto-cadastro
