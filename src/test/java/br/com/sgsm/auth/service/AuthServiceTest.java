@@ -256,6 +256,23 @@ class AuthServiceTest {
     }
 
     @Test
+    void registrar_deveAceitarAdminEstabelecimentoComoTipoPerfilValido() {
+        var request = new RegistrarRequest("admin@a.com", "senha123", "ADMIN_ESTABELECIMENTO", referenciaId);
+        EntidadeAuth entidade = entidadeAtiva("admin@a.com", "ADMIN_ESTABELECIMENTO");
+        Role role = role("ADMIN_ESTABELECIMENTO");
+        when(entidadeAuthRepository.findByReferenciaIdAndTipo(referenciaId, "ADMIN_ESTABELECIMENTO"))
+                .thenReturn(Optional.of(entidade));
+        when(usuarioRepository.existsByEmail("admin@a.com")).thenReturn(false);
+        when(roleRepository.findByNome("ADMIN_ESTABELECIMENTO")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senha123")).thenReturn("hash-senha");
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.registrar(request);
+
+        assertThat(response.getTipoPerfil()).isEqualTo("ADMIN_ESTABELECIMENTO");
+    }
+
+    @Test
     void registrar_deveResolverEntidadePeloEmail_quandoFuncionarioSemReferenciaId() {
         var request = new RegistrarRequest("func@a.com", "senha123", "FUNCIONARIO", null);
         EntidadeAuth entidade = entidadeAtiva("func@a.com", "FUNCIONARIO");

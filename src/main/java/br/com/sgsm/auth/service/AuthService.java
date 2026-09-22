@@ -27,7 +27,7 @@ public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
-    private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR");
+    private static final Set<String> PERFIS_VALIDOS = Set.of("MEDICO", "PACIENTE", "FUNCIONARIO", "DESENVOLVEDOR", "ADMIN_ESTABELECIMENTO");
 
     private static final String LOGIN_TENTATIVAS_PREFIX = "auth:login:tentativas:";
     private static final int MAX_TENTATIVAS_LOGIN = 5;
